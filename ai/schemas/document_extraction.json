@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DocumentExtraction",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "deadline": {
+      "type": "string"
+    },
+    "eligibility": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "requirements": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "important_information": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "action_items": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "title",
+    "deadline",
+    "eligibility",
+    "requirements",
+    "important_information",
+    "action_items"
+  ],
+  "additionalProperties": false
+}

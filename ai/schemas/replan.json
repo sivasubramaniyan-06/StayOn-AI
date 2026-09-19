@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ReplanGeneration",
+  "type": "object",
+  "properties": {
+    "planId": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "string"
+    },
+    "changes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "taskId": {
+            "type": "string"
+          },
+          "taskTitle": {
+            "type": "string"
+          },
+          "currentDate": {
+            "type": ["string", "null"]
+          },
+          "proposedDate": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "taskId",
+          "proposedDate"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "requiresUserConfirmation": {
+      "type": "boolean",
+      "enum": [true]
+    }
+  },
+  "required": [
+    "planId",
+    "summary",
+    "changes",
+    "requiresUserConfirmation"
+  ],
+  "additionalProperties": false
+}

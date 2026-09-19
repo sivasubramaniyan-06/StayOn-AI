@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TaskGeneration",
+  "type": "object",
+  "properties": {
+    "goalId": {
+      "type": "string"
+    },
+    "tasks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "parentId": {
+            "type": ["string", "null"]
+          },
+          "estimatedMinutes": {
+            "type": "integer",
+            "minimum": 5
+          },
+          "scheduledDate": {
+            "type": ["string", "null"]
+          }
+        },
+        "required": [
+          "title",
+          "parentId",
+          "estimatedMinutes",
+          "scheduledDate"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "goalId",
+    "tasks"
+  ],
+  "additionalProperties": false
+}
