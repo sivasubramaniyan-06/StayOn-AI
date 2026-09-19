@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GoalGeneration",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "deadline": {
+      "type": "string"
+    },
+    "documentId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "title",
+    "description",
+    "deadline",
+    "documentId"
+  ],
+  "additionalProperties": false
+}
