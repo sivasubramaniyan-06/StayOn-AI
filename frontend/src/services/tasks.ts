@@ -94,5 +94,21 @@ export const tasksService = {
       }
       throw error;
     }
+  },
+
+  /**
+   * DELETE /tasks/{id}
+   */
+  async deleteTask(id: string): Promise<{ success: boolean; id: string }> {
+    try {
+      const response = await apiClient.delete<{ success: boolean; id: string }>(`/tasks/${id}`);
+      return response.data;
+    } catch (error) {
+      if (ENABLE_MOCK) {
+        inMemoryToday.tasks = inMemoryToday.tasks.filter(t => t.id !== id);
+        return { success: true, id };
+      }
+      throw error;
+    }
   }
 };
