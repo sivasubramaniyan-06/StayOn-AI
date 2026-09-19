@@ -21,6 +21,17 @@
 
 ---
 
+## Team Structure & Branch Responsibilities
+
+| Developer | Branch | Core Responsibilities |
+| :--- | :--- | :--- |
+| **Person 1**<br>*(Tech Lead)* | `feature/person-1-aws-ai` | AWS architecture, Bedrock, Bedrock document extraction, AI prompts, Bedrock Agent, AI task generation, AI replanning, AWS integration, final integration/deployment. |
+| **Person 4**<br>*(Backend)* | `feature/person-4-backend` | Cognito, API Gateway, Lambda, DynamoDB, S3 backend/storage, CRUD APIs, backend validation, authentication/backend security, API implementation. |
+| **Person 2**<br>*(Frontend)* | `feature/person-2-knowledge` | Main frontend, Knowledge, PDF upload UI, Document UI, Goal UI, Dashboard. |
+| **Person 3**<br>*(Frontend)* | `feature/person-3-execution` | Goal Tree, Tasks, Scheduling UI, Completion, Progress, Habits, Agent UI, Replanning UI. |
+
+---
+
 ## Recommended Commit Format
 
 Use conventional commit prefixes:

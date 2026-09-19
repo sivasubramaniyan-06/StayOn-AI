@@ -101,9 +101,10 @@ The team adheres to a strict feature branch strategy to ensure `main` remains cl
 
 | Developer | Branch | Core Responsibilities |
 | :--- | :--- | :--- |
-| **Person 1**<br>*(Tech Lead)* | `feature/person-1-aws-ai` | AWS architecture, API Gateway, Lambda, DynamoDB, S3, Cognito, IAM, CloudWatch, Amazon Bedrock, document extraction, Bedrock Agent, agent action tools, AI prompts, backend validation, scheduling backend, integration, deployment, final debugging. |
-| **Person 2** | `feature/person-2-knowledge` | Main frontend, React/Next.js application shell, navigation, login UI, dashboard UI, Knowledge page, PDF upload UI, document list/details, extraction result display, create goal flow, goal page, frontend API & Cognito integration. |
-| **Person 3** | `feature/person-3-execution` | Goal tree, tasks, nested task UI, task CRUD, scheduling UI, task completion, progress, habits/streak, StayOn Agent UI, replanning UI, API integration. |
+| **Person 1**<br>*(Tech Lead)* | `feature/person-1-aws-ai` | AWS architecture, Bedrock, Bedrock document extraction, AI prompts, Bedrock Agent, AI task generation, AI replanning, AWS integration, final integration/deployment. |
+| **Person 4**<br>*(Backend)* | `feature/person-4-backend` | Cognito, API Gateway, Lambda, DynamoDB, S3 backend/storage, CRUD APIs, backend validation, authentication/backend security, API implementation. |
+| **Person 2**<br>*(Frontend)* | `feature/person-2-knowledge` | Main frontend, Knowledge, PDF upload UI, Document UI, Goal UI, Dashboard. |
+| **Person 3**<br>*(Frontend)* | `feature/person-3-execution` | Goal Tree, Tasks, Scheduling UI, Completion, Progress, Habits, Agent UI, Replanning UI. |
 
 ### Development Rules
 All team members must read and follow [docs/TEAM_RULES.md](docs/TEAM_RULES.md).
