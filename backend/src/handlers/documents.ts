@@ -51,8 +51,8 @@ export async function documentsHandler(
         /*
          * POST /documents
          *
-         * For now this creates the document metadata.
-         * S3 upload/presigned URL will be connected later.
+         * Creates document metadata and returns
+         * a presigned S3 upload URL.
          */
         if (event.httpMethod === "POST") {
             if (!event.body) {
@@ -105,13 +105,14 @@ export async function documentsHandler(
                 fileName: body.fileName.trim(),
                 contentType: body.contentType.trim(),
                 s3Key: `users/${userId}/documents/${crypto.randomUUID()}-${body.fileName.trim()}`,
-                status: "uploaded",
+                status: "pending_upload",
                 createdAt: now,
                 updatedAt: now,
             };
 
             const createdDocument =
                 await createDocument(document);
+
             const uploadUrl = await createDocumentUploadUrl(
                 document.s3Key,
                 document.contentType,

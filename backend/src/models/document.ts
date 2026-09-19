@@ -6,7 +6,12 @@ export interface Document {
     contentType: string;
     s3Key: string;
 
-    status: "uploaded" | "processing" | "completed" | "failed";
+    status:
+  | "pending_upload"
+  | "uploaded"
+  | "processing"
+  | "completed"
+  | "failed";
 
     createdAt: string;
     updatedAt: string;
