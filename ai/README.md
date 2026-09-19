@@ -1,214 +1,340 @@
 # StayOn AI — AI Layer (Person 1 / Tech Lead)
 
-This directory contains the core reasoning, extraction, goal generation, task generation, and adaptive replanning layer for **StayOn AI**, powered by **Amazon Bedrock**.
+This directory contains the complete AI and reasoning subsystem for **StayOn AI**, powered by **Amazon Bedrock**.
 
 ---
 
-## Architecture & Principles
+## 1. AI Architecture & Core Principles
 
-1. **"Bedrock suggests, backend validates, student confirms."**
-   - The AI layer NEVER writes directly to Amazon DynamoDB or S3.
-   - All mutations pass through typed tool interfaces (`ai/agent/tools.py`) designed to interface with Person 4's backend / API Gateway / Lambda services.
-   - High-impact changes (such as rescheduling tasks or applying a replan) strictly enforce `requiresUserConfirmation: true`.
-2. **Zero Fabrication**:
-   - The extraction and planning models are prompted and schema-validated to never fabricate missing dates, deadlines, or prerequisites.
-   - If a deadline is not in the source syllabus, it defaults to an empty string `""` or `null`.
+StayOn AI follows an AI-assisted, student-first workspace architecture:
+
+```
+PDF / Document Upload
+        ↓
+Document Understanding (Bedrock Converse document content block)
+        ↓
+Goal Generation (deterministic JSON schema validation)
+        ↓
+Task Generation (actionable student breakdown)
+        ↓
+Task Execution & Scheduling
+        ↓
+StayOn AI Agent (controlled reasoning & intent routing)
+        ↓
+Approved Action Tools (read vs mutation distinction)
+        ↓
+Adaptive Replanning (rescheduling proposals)
+        ↓
+User Confirmation (strict human-in-the-loop)
+```
+
+### Core Architecture Invariant
+> **"Bedrock suggests. Backend validates. User confirms important changes."**
+
+- **Zero Direct Database Access**: The AI layer **NEVER** interacts directly with DynamoDB, S3, Cognito, or internal AWS CRUD APIs.
+- **Controlled Backend Tools**: All state mutations and reads pass through typed adapters (`ai/agent/tools.py`), adhering to `docs/API_CONTRACT.md`.
+- **Human-in-the-Loop**: Any operation that mutates a student's plan or schedule strictly enforces `requiresUserConfirmation: true`.
+- **Zero Fabrication**: Prompts and JSON schemas enforce that dates, prerequisites, and deadlines cannot be hallucinated. If a deadline is not present in the document, it defaults to `""` or `null`.
 
 ---
 
-## Directory Structure
+## 2. Bedrock Model & Environment Configuration
+
+All configuration is environment- and config-driven. No credentials or AWS account IDs are hardcoded.
+
+### Configuration Defaults & Environment Variables
+
+| Variable | Default Value | Description |
+|---|---|---|
+| `BEDROCK_MODEL_ID` | `amazon.nova-2-lite-v1:0` | Amazon Bedrock foundation model ID |
+| `AWS_REGION` | `ap-south-1` | Primary AWS Region (Asia Pacific Mumbai) |
+| `AWS_PROFILE` | `stayon` | AWS CLI / SSO credential profile |
+| `RUN_LIVE_BEDROCK_TESTS` | `0` | Set to `1` to run live Bedrock tests via pytest |
+
+AWS authentication follows standard `boto3` credential resolution (Environment variables -> AWS SSO / `~/.aws/credentials` -> IAM Roles).
+
+---
+
+## 3. Directory Structure
 
 ```
 ai/
-├── prompts/                    # Carefully engineered prompt templates
-│   ├── document_extraction.txt # Extraction instructions for syllabi & rubrics
-│   ├── goal_generation.txt     # Synthesizing goals from extracted documents
-│   ├── task_generation.txt     # Decomposing goals into actionable tasks
-│   └── replanning.txt          # Adaptive rescheduling with mandatory confirmation
+├── prompts/                      # Version-controlled prompt templates
+│   ├── document_extraction.txt   # Extraction instructions for syllabi & rubrics
+│   ├── goal_generation.txt       # Goal synthesis from extraction
+│   ├── task_generation.txt       # Decomposing goals into actionable tasks
+│   └── replanning.txt            # Adaptive rescheduling with mandatory confirmation
 │
-├── schemas/                    # JSON Schemas enforcing strict structured output
-│   ├── document_extraction.json
-│   ├── goal.json
-│   ├── task_generation.json
-│   └── replan.json
+├── schemas/                      # Strict JSON Schemas enforcing output formats
+│   ├── document_extraction.json  # Validates extracted syllabus metadata
+│   ├── goal.json                 # Validates student goal structures
+│   ├── task_generation.json      # Validates task lists and minute estimates
+│   └── replan.json               # Validates proposed plan changes
 │
-├── extraction/                 # Document understanding pipeline
+├── extraction/                   # Document understanding pipeline
 │   ├── __init__.py
-│   └── bedrock_extractor.py    # Calls Bedrock Converse API & validates against schema
+│   └── bedrock_extractor.py      # Bedrock Converse PDF/text extractor
 │
-├── planning/                   # Academic breakdown & scheduling
+├── planning/                     # Academic planning & breakdown
 │   ├── __init__.py
-│   ├── goal_generator.py       # Converts extraction to student goal
-│   ├── task_generator.py       # Converts goal to task hierarchy
-│   └── replan_generator.py     # Generates rescheduling proposals
+│   ├── goal_generator.py         # Document -> Goal generator
+│   ├── task_generator.py         # Goal -> Task list generator
+│   └── replan_generator.py       # Context -> Rescheduling proposal generator
 │
-├── agent/                      # Student companion reasoning layer
+├── agent/                        # Conversational companion & reasoning
 │   ├── __init__.py
-│   ├── agent.py                # Handles student conversational queries & intent routing
-│   └── tools.py                # Controlled action tools connecting to backend
+│   ├── agent.py                  # Intent classification & action coordinator
+│   └── tools.py                  # Approved tools & backend adapter protocol
 │
-├── tests/                      # Comprehensive test suite (44 tests, 100% offline-ready)
+├── tests/                        # Comprehensive test suite (53 passed, 1 skipped)
 │   ├── __init__.py
-│   ├── test_extraction.py
-│   ├── test_goal_generation.py
-│   ├── test_task_generation.py
-│   └── test_replanning.py
+│   ├── test_extraction.py        # PDF bytes, text, & schema failure tests
+│   ├── test_goal_generation.py   # Goal creation & validation tests
+│   ├── test_task_generation.py   # Task generation, hierarchy, & bounds tests
+│   ├── test_replanning.py        # Replan, agent intents, & safety tests
+│   └── test_live_bedrock.py      # Opt-in live Bedrock integration test
 │
-├── client.py                   # Bedrock Converse API client & MockBedrockClient adapter
-├── requirements.txt            # Python dependencies
-└── README.md                   # This documentation
+├── client.py                     # Bedrock Converse wrapper & MockBedrockClient
+├── live_test.py                  # Standalone CLI for live Bedrock verification
+├── requirements.txt              # Dependencies: boto3, jsonschema, pytest
+└── README.md                     # Comprehensive documentation
 ```
 
 ---
 
-## Amazon Bedrock Model Configuration
+## 4. Subsystems Breakdown
 
-- **Foundation Model**: `amazon.nova-2-lite-v1:0`
-- **Region**: `ap-south-1` (AWS Asia Pacific Mumbai)
-- **API**: Bedrock Runtime **Converse API** (`converse`)
-- **AWS Profile**: `stayon` (or standard environment variables / IAM roles)
+### A. Document Understanding (`ai/extraction/`)
+Extracts academic metadata from PDFs or text using Amazon Bedrock Converse API.
+- **Native PDF Support (`extract_document`)**: Passes raw PDF bytes as a Bedrock Converse document content block:
+  ```json
+  {"document": {"format": "pdf", "name": "syllabus", "source": {"bytes": b"..."}}}
+  ```
+- **Text Support (`extract`)**: Accepts pre-extracted text strings.
+- **Output Schema**: Conforms to `schemas/document_extraction.json` (`title`, `deadline`, `requirements`, `action_items`).
+
+### B. Goal Generation (`ai/planning/goal_generator.py`)
+Synthesizes high-level student goals from extracted document metadata.
+- **Input**: `DocumentExtractionResult`, `documentId`.
+- **Output Schema**: Conforms to `schemas/goal.json`:
+  ```json
+  {
+    "title": "...",
+    "description": "...",
+    "deadline": "...",
+    "documentId": "..."
+  }
+  ```
+- Rejects empty strings, validates `documentId` preservation, and runs at low temperature (`0.1`) for determinism.
+
+### C. Task Generation (`ai/planning/task_generator.py`)
+Breaks a goal down into actionable student-sized tasks (30–120 min default range, 5–480 min bounded).
+- **Input**: `goal` (dict or object), `goalId`, optional `documentInfo`, optional `deadline`.
+- **Output Schema**: Conforms to `schemas/task_generation.json`:
+  ```json
+  {
+    "goalId": "...",
+    "tasks": [
+      {
+        "title": "...",
+        "parentId": null,
+        "estimatedMinutes": 45,
+        "scheduledDate": null
+      }
+    ]
+  }
+  ```
+- Supports hierarchical/nested subtasks via `parentId`.
+
+### D. StayOn AI Agent (`ai/agent/agent.py`)
+Processes conversational student requests, classifies intent, queries context, and generates structured responses.
+- **Intent Handling**:
+  - *"What should I work on today?"* -> Calls `get_today_tasks` (read-only, no confirmation needed).
+  - *"What pending tasks do I have?"* -> Calls `get_pending_tasks` (read-only, no confirmation needed).
+  - *"I finished early today"* -> Suggests optional early work or rest (read-only).
+  - *"Can you add revision for chapter 3?"* -> Proposes `create_tasks` (requires confirmation).
+  - *"I missed yesterday's study session / Move tasks to tomorrow"* -> Proposes `replan` (requires confirmation).
+
+### E. Approved Agent Tools (`ai/agent/tools.py`)
+Only 4 approved tools are exposed to the AI agent:
+1. `get_today_tasks()`: Retrieves tasks scheduled for today.
+2. `get_pending_tasks()`: Retrieves all uncompleted tasks across active goals.
+3. `create_tasks(tasks)`: Generates proposed new tasks.
+4. `replan_tasks(reason, affected_task_ids, shift_days)`: Proposes a schedule adjustment.
+
+Each tool defines a strict JSON parameter schema in `TOOL_SCHEMAS`.
+
+### F. Action Safety & User Confirmation
+The agent strictly categorizes operations into:
+- **READ Operations**: Directly handled without confirmation (`requiresUserConfirmation = False`).
+- **MUTATING Operations**: Replan proposals or new task batches always return `requiresUserConfirmation = True` and populate `suggestedActions`:
+  ```json
+  {
+    "reply": "I can reschedule your remaining tasks...",
+    "suggestedActions": [
+      {
+        "type": "replan",
+        "action": "replan",
+        "requiresUserConfirmation": true,
+        "requiresConfirmation": true,
+        "parameters": { ... }
+      }
+    ]
+  }
+  ```
+
+### G. Adaptive Replanning Engine (`ai/planning/replan_generator.py`)
+Generates structured change proposals when schedules slip or life events occur.
+- **Output Schema**: Conforms to `schemas/replan.json`:
+  ```json
+  {
+    "planId": "replan-...",
+    "summary": "...",
+    "changes": [
+      {
+        "taskId": "...",
+        "changeType": "reschedule",
+        "fromDate": "2026-09-19",
+        "toDate": "2026-09-20",
+        "reason": "..."
+      }
+    ],
+    "requiresUserConfirmation": true
+  }
+  ```
 
 ---
 
-## Offline Testing & Mock Mode
+## 5. Offline Testing & Verification
 
-Because account verification can take time or developers may work locally without active AWS credentials, the entire AI layer includes built-in dependency injection:
-
-```python
-from ai.client import MockBedrockClient
-from ai.extraction import BedrockDocumentExtractor
-
-# 1. Instantiate with mock client
-mock_client = MockBedrockClient(default_response_text='{"title": "CS 101", ...}')
-extractor = BedrockDocumentExtractor(client=mock_client)
-
-# 2. Extract without making live network calls
-result = extractor.extract("Course syllabus text...")
-```
-
-### Running Tests Locally
+The test suite requires **no AWS credentials**, **no active Bedrock connection**, and **no network access**.
 
 ```bash
-# Run the complete test suite
-pytest -q
+# Run all tests offline
+.venv/bin/pytest -q
 ```
+**Results**:
+- 53 unit tests passing across extraction, goal generation, task breakdown, replanning, and agent safety.
+- 1 test cleanly skipped (`test_live_bedrock.py` when live flags are not set).
 
-All 44 tests run completely offline with 0 network calls in < 0.1s.
+### Key Test Scenarios Covered
+1. Valid and malformed PDF/document extraction.
+2. Valid and malformed goal generation (rejection of empty fields).
+3. Valid and malformed task generation (minute bounds, parent-child links).
+4. Read-only conversational agent queries (no confirmation required).
+5. Mutating conversational requests (mandatory confirmation flag).
+6. Replanning proposals with structured `changeType`, `fromDate`, and `toDate`.
+7. Empty model responses, malformed JSON, and Bedrock client exceptions.
 
 ---
 
-## Pipeline & Data Flow
+## 6. Live Bedrock Diagnostic Utility
 
-### PDF / Document Ingestion Flow
+To verify AWS Bedrock once AWS finishes account verification, run the standalone diagnostic tool:
 
+```bash
+# Verify live Bedrock access using profile 'stayon' and region 'ap-south-1'
+python3 ai/live_test.py
 ```
-PDF bytes / file (e.g. from S3)
-             │
-             ▼
-[BedrockDocumentExtractor.extract_document]
-             │
-             ▼  Converse Message with Document Content Block:
-             │  {"document": {"format": "pdf", "name": "syllabus", "source": {"bytes": b"..."}}}
-             │
-             ▼
-Amazon Bedrock Converse API (amazon.nova-2-lite-v1:0)
-             │
-             ▼  Raw JSON output
-             │
-             ▼
-JSON Schema Validation (schemas/document_extraction.json)
-             │
-             ▼
-DocumentExtractionResult (title, deadline, requirements, action_items)
-             │
-             ▼
-[GoalGenerator.generate_goal]
-             │
-             ▼
-[TaskGenerator.generate_tasks]
-             │
-             ▼
-[StayOnAgent & ReplanGenerator] (requiresUserConfirmation = True)
+
+### Diagnostic Output Example
+When credentials are valid but AWS account verification is pending:
+```
+============================================================
+StayOn AI — Amazon Bedrock Live Diagnostic Test
+============================================================
+Region:    ap-south-1
+Model ID:  amazon.nova-2-lite-v1:0
+Profile:   stayon
+Testing Bedrock Converse API...
+
+[ACCESS VERIFICATION PENDING]
+AWS Error Code: AccessDeniedException
+Message: Your account is currently being verified. Verification normally takes less than 2 hours.
+
+Live Bedrock test halted cleanly. No fake calls were made.
+The architecture is ready to work live once AWS verification completes.
+============================================================
+```
+
+To run the pytest integration test against live Bedrock once verified:
+```bash
+RUN_LIVE_BEDROCK_TESTS=1 .venv/bin/pytest ai/tests/test_live_bedrock.py
 ```
 
 ---
 
-## Python Extraction APIs
+## 7. Integration Points for Person 4 (Backend Teammate)
 
-`BedrockDocumentExtractor` provides two input methods:
+Person 4 implements the API Gateway and AWS Lambda CRUD handlers. The AI layer is designed as a drop-in dependency for these handlers:
 
-### 1. Native PDF / Document Bytes (`extract_document`) — *Primary*
-Directly submits PDF bytes to Amazon Bedrock Converse using native document content blocks:
-
+### 1. Document Extraction Handler (`POST /documents`)
 ```python
 from ai.extraction import BedrockDocumentExtractor
 
-extractor = BedrockDocumentExtractor()
-
-# Read PDF bytes (e.g., downloaded from S3)
-with open("syllabus.pdf", "rb") as f:
-    pdf_bytes = f.read()
-
-# Direct Bedrock Converse document extraction
-result = extractor.extract_document(
-    document_bytes=pdf_bytes,
-    file_name="syllabus.pdf",
-    file_type="application/pdf",
-)
-
-print(result.title)
-print(result.deadline)
-print(result.requirements)
-print(result.action_items)
-```
-
-### 2. Raw Text Extraction (`extract`) — *Fallback / Text-based*
-Extracts structured information from pre-extracted text strings:
-
-```python
-result = extractor.extract(document_text="Course: CS 480...")
-```
-
----
-
-## Live Bedrock Readiness
-- The Bedrock client uses the standard `boto3` Bedrock Runtime Converse API (`amazon.nova-2-lite-v1:0` in `ap-south-1`).
-- Document content blocks use the exact AWS format:
-  `{"document": {"format": "pdf", "name": clean_name, "source": {"bytes": document_bytes}}}`
-- **Zero code changes** will be required once AWS account verification completes. Live calls will automatically succeed using the developer's AWS profile (`stayon`).
-
----
-
-## Integration Points
-
-### With Person 4 (Backend Teammate)
-- **Lambda Handlers**:
-  - `POST /documents`:
-    When Person 4's Lambda processes an S3 upload, Lambda reads document bytes from S3 and calls:
-    ```python
-    from ai.extraction import BedrockDocumentExtractor
-
+def lambda_handler(event, context):
+    s3_bytes = download_from_s3(event["s3Key"])
     extractor = BedrockDocumentExtractor()
-    extraction = extractor.extract_document(
-        document_bytes=s3_object_bytes,
+    result = extractor.extract_document(
+        document_bytes=s3_bytes,
         file_name=event["fileName"],
-        file_type="application/pdf",
+        file_type=event.get("fileType", "application/pdf")
     )
-    # Store extraction.to_dict() in DynamoDB DOC#<id> record
-    ```
-  - `POST /goals`: When auto-generating a goal from a document, invoke `GoalGenerator.generate_goal(extraction, document_id)`.
-  - `POST /tasks`: When breaking down a goal into tasks, invoke `TaskGenerator.generate_tasks(goal, extraction)`.
-  - `POST /agent`: Direct route to `StayOnAgent.handle_message(body["message"])`.
-  - `POST /replan`: Invoke `ReplanGenerator.generate_replan(...)`.
-- **Action Tools Protocol**:
-  - `ai/agent/tools.py` provides `TaskBackendProtocol`.
-  - Person 4 connects this protocol to real DynamoDB CRUD operations and API Gateway Lambda handlers.
+    # Save result.to_dict() into DynamoDB DOC#<id>
+```
 
-### With Person 2 & 3 (Frontend Teammates)
-- **Document Extraction Display (Person 2)**:
-  - Consumes `DocumentExtractionResult` fields: `title`, `deadline`, `requirements`, `action_items`.
-- **Goal Tree & Scheduling UI (Person 3)**:
-  - Consumes `GeneratedTaskList` fields (`tasks[].title`, `tasks[].estimatedMinutes`, `tasks[].scheduledDate`).
-- **Agent Chat & Confirmation Modal (Person 3)**:
-  - Consumes `AgentResponse` (`reply`, `suggestedActions`).
-  - When `requiresConfirmation: true`, displays a confirmation modal with proposed schedule adjustments (`pendingPlan.changes`).
+### 2. Goal Generation Handler (`POST /goals`)
+```python
+from ai.planning import GoalGenerator
+from ai.extraction import DocumentExtractionResult
+
+def lambda_handler(event, context):
+    extraction = DocumentExtractionResult.from_dict(event["documentExtraction"])
+    generator = GoalGenerator()
+    goal = generator.generate_goal(extraction, document_id=event["documentId"])
+    # Return goal.to_dict() conforming to POST /goals schema
+```
+
+### 3. Task Generation Handler (`POST /tasks`)
+```python
+from ai.planning import TaskGenerator
+
+def lambda_handler(event, context):
+    generator = TaskGenerator()
+    task_list = generator.generate_tasks(
+        goal=event["goal"],
+        goal_id=event["goalId"],
+        deadline=event.get("deadline")
+    )
+    # Persist tasks to DynamoDB TASK#<id> records
+```
+
+### 4. Agent Endpoint (`POST /agent`)
+```python
+from ai.agent import StayOnAgent
+from ai.agent.tools import TaskBackendAdapter
+
+def lambda_handler(event, context):
+    # Person 4 connects TaskBackendAdapter to DynamoDB query functions
+    adapter = TaskBackendAdapter(
+        today_tasks_provider=fetch_today_tasks_from_dynamo,
+        pending_tasks_provider=fetch_pending_tasks_from_dynamo,
+    )
+    agent = StayOnAgent(backend=adapter)
+    response = agent.handle_message(event["message"])
+    # Return response.to_dict() containing reply & suggestedActions
+```
+
+### 5. Replanning Endpoint (`POST /replan`)
+```python
+from ai.planning import ReplanGenerator
+
+def lambda_handler(event, context):
+    generator = ReplanGenerator()
+    replan = generator.generate_replan(
+        reason=event["reason"],
+        current_tasks=event.get("currentTasks", []),
+        goals=event.get("goals", [])
+    )
+    # Returns plan with requiresUserConfirmation = True
+```

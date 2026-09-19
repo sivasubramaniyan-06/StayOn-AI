@@ -11,8 +11,8 @@ import os
 import re
 from typing import Any, Dict, List, Optional, Protocol, Union
 
-DEFAULT_MODEL_ID = "amazon.nova-2-lite-v1:0"
-DEFAULT_REGION = "ap-south-1"
+DEFAULT_MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "amazon.nova-2-lite-v1:0")
+DEFAULT_REGION = os.getenv("AWS_REGION", os.getenv("AWS_DEFAULT_REGION", "ap-south-1"))
 
 
 class BedrockConverseError(Exception):
@@ -104,7 +104,7 @@ class MockBedrockClient:
         default_response_text: Optional[str] = None,
         responses: Optional[List[Union[str, Dict[str, Any], Exception]]] = None,
     ) -> None:
-        self.default_response_text = default_response_text or "{}"
+        self.default_response_text = "{}" if default_response_text is None else default_response_text
         self.responses: List[Union[str, Dict[str, Any], Exception]] = list(responses or [])
         self.call_history: List[Dict[str, Any]] = []
 

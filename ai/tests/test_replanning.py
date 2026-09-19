@@ -234,3 +234,51 @@ def test_agent_conversational_fallback():
     assert isinstance(response, AgentResponse)
     assert "Sure!" in response.reply
     assert len(response.suggestedActions) > 0
+
+
+def test_agent_handles_early_completion_read_only():
+    """Verify Agent handles 'I finished my assignment early' as a read-only query without confirmation."""
+    mock_client = MockBedrockClient()
+    agent = StayOnAgent(client=mock_client)
+
+    response = agent.handle_message("I finished my assignment early.")
+    assert isinstance(response, AgentResponse)
+    assert "finishing early" in response.reply.lower()
+    assert response.requiresConfirmation is False
+    assert all(a.get("requiresUserConfirmation") is False for a in response.suggestedActions)
+
+
+def test_agent_handles_create_task_mutation_requires_confirmation():
+    """Verify Agent handles 'Can you add revision for chapter 3?' as mutation requiring confirmation."""
+    mock_client = MockBedrockClient()
+    agent = StayOnAgent(client=mock_client)
+
+    response = agent.handle_message("Can you add revision for chapter 3?")
+    assert isinstance(response, AgentResponse)
+    assert response.requiresConfirmation is True
+    assert len(response.suggestedActions) == 1
+    action = response.suggestedActions[0]
+    assert action["type"] == "create_tasks"
+    assert action["requiresUserConfirmation"] is True
+    assert "Revision for chapter 3" in action["tasks"][0]["title"]
+
+
+def test_agent_mutation_move_tasks_requires_confirmation():
+    """Verify Agent handles 'Move all my tasks to tomorrow' as replan mutation requiring confirmation."""
+    mock_client = MockBedrockClient(default_response_text=json.dumps(SAMPLE_REPLAN_PAYLOAD))
+    generator = ReplanGenerator(client=mock_client)
+    agent = StayOnAgent(client=mock_client, replan_generator=generator)
+
+    response = agent.handle_message("Move all my tasks to tomorrow.")
+    assert isinstance(response, AgentResponse)
+    assert response.requiresConfirmation is True
+    assert any(a["type"] == "replan" and a["requiresUserConfirmation"] is True for a in response.suggestedActions)
+
+
+def test_replan_empty_model_response_raises_error():
+    """Verify empty model response string raises ReplanParseError."""
+    mock_client = MockBedrockClient(default_response_text="")
+    generator = ReplanGenerator(client=mock_client)
+
+    with pytest.raises(ReplanParseError):
+        generator.generate_replan([], [], [])

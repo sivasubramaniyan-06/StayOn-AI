@@ -90,18 +90,30 @@ class StayOnAgent:
         clean_msg = message.strip()
         lower_msg = clean_msg.lower()
 
-        # Intent: Today's Tasks
-        if any(phrase in lower_msg for phrase in ["today", "what to do", "my day", "what should i do"]):
+        # Intent: Today's Tasks (READ operation)
+        if any(phrase in lower_msg for phrase in ["today", "what to do", "my day", "what should i do", "what should i work on"]):
             today_tasks = self.tools.get_today_tasks()
             return self._handle_today_query(today_tasks)
 
-        # Intent: Pending Tasks
+        # Intent: Pending Tasks (READ operation)
         if any(phrase in lower_msg for phrase in ["pending", "what tasks", "tasks left", "remaining"]):
             pending = self.tools.get_pending_tasks()
             return self._handle_pending_query(pending)
 
-        # Intent: Missed / Replanning
-        if any(phrase in lower_msg for phrase in ["missed", "yesterday", "replan", "fell behind", "reschedule"]):
+        # Intent: Finished Early (READ operation)
+        if any(phrase in lower_msg for phrase in ["finished early", "finished my assignment", "assignment early", "done early", "completed early"]):
+            pending = self.tools.get_pending_tasks()
+            return self._handle_finished_early_query(pending)
+
+        # Intent: Create Task Request (MUTATION operation - requires user confirmation)
+        if any(phrase in lower_msg for phrase in ["add revision", "add task", "create task", "schedule revision", "revision for"]):
+            return self._handle_create_task_request(clean_msg)
+
+        # Intent: Missed / Replanning / Exam tomorrow / Move tasks (MUTATION operation - requires user confirmation)
+        if any(phrase in lower_msg for phrase in [
+            "missed", "yesterday", "replan", "fell behind", "reschedule",
+            "exam tomorrow", "move all my tasks", "move my tasks", "move tasks"
+        ]):
             return self._handle_replan_request(reason=clean_msg)
 
         # Intent: General study planning or conversational query
@@ -115,8 +127,10 @@ class StayOnAgent:
                     {
                         "type": "view_pending",
                         "label": "View All Pending Tasks",
+                        "requiresUserConfirmation": False,
                     }
                 ],
+                requiresConfirmation=False,
             )
 
         task_summaries = [f"• {t.get('title')} ({t.get('estimatedMinutes', 30)} mins)" for t in tasks]
@@ -135,8 +149,10 @@ class StayOnAgent:
                     "type": "start_task",
                     "taskId": first_task.get("id"),
                     "label": f"Start '{first_task.get('title')}'",
+                    "requiresUserConfirmation": False,
                 }
             ],
+            requiresConfirmation=False,
         )
 
     def _handle_pending_query(self, tasks: List[Dict[str, Any]]) -> AgentResponse:
@@ -144,6 +160,7 @@ class StayOnAgent:
             return AgentResponse(
                 reply="You have no pending tasks. All caught up!",
                 suggestedActions=[],
+                requiresConfirmation=False,
             )
 
         reply = f"You have {len(tasks)} pending task(s) across your active goals."
@@ -152,10 +169,74 @@ class StayOnAgent:
                 "type": "start_task",
                 "taskId": t.get("id"),
                 "label": f"Work on {t.get('title')}",
+                "requiresUserConfirmation": False,
             }
             for t in tasks[:3]
         ]
-        return AgentResponse(reply=reply, suggestedActions=suggested_actions)
+        return AgentResponse(
+            reply=reply,
+            suggestedActions=suggested_actions,
+            requiresConfirmation=False,
+        )
+
+    def _handle_finished_early_query(self, tasks: List[Dict[str, Any]]) -> AgentResponse:
+        """Handle student finishing work ahead of schedule (read-only guidance)."""
+        if not tasks:
+            return AgentResponse(
+                reply="Awesome job finishing early! You have no other pending tasks for your goals. Enjoy your well-earned break!",
+                suggestedActions=[],
+                requiresConfirmation=False,
+            )
+
+        next_task = tasks[0]
+        reply = (
+            f"Great momentum finishing early! If you feel like getting ahead, you have {len(tasks)} "
+            f"pending task(s). You could tackle '{next_task.get('title')}'. Or take a well-deserved rest!"
+        )
+        return AgentResponse(
+            reply=reply,
+            suggestedActions=[
+                {
+                    "type": "start_task",
+                    "taskId": next_task.get("id"),
+                    "label": f"Start next task: '{next_task.get('title')}'",
+                    "requiresUserConfirmation": False,
+                }
+            ],
+            requiresConfirmation=False,
+        )
+
+    def _handle_create_task_request(self, message: str) -> AgentResponse:
+        """Handle task addition request with mandatory confirmation."""
+        # Clean message punctuation
+        clean = re.sub(r"[?!.]+$", "", message).strip()
+        match = re.search(r"(?:can you\s+)?(?:please\s+)?(?:add|create|schedule)\s+(?:a\s+)?(?:task\s+for\s+|task\s+)?(.+)", clean, re.IGNORECASE)
+        title = match.group(1).strip() if match else clean
+        title = title[0].upper() + title[1:] if title else "New task"
+
+        proposed_task = {
+            "title": title,
+            "estimatedMinutes": 45,
+            "scheduledDate": None,
+        }
+
+        reply = (
+            f"I have prepared a proposal to add '{title}' (estimated 45 mins) to your workspace. "
+            f"Would you like me to add this task?"
+        )
+
+        return AgentResponse(
+            reply=reply,
+            suggestedActions=[
+                {
+                    "type": "create_tasks",
+                    "requiresUserConfirmation": True,
+                    "tasks": [proposed_task],
+                    "label": f"Confirm: Add '{title}'",
+                }
+            ],
+            requiresConfirmation=True,
+        )
 
     def _handle_replan_request(self, reason: str) -> AgentResponse:
         pending = self.tools.get_pending_tasks()
@@ -169,19 +250,27 @@ class StayOnAgent:
 
         reply = (
             f"No worries at all! Life happens. {replan.summary} "
-            f"I have prepared an updated schedule for you. Please review and confirm to apply it."
+            f"I can propose moving the affected tasks to an adjusted schedule. Would you like me to apply that?"
         )
 
         return AgentResponse(
             reply=reply,
             suggestedActions=[
                 {
-                    "type": "confirm_replan",
+                    "type": "replan",
+                    "requiresUserConfirmation": True,
                     "planId": replan.planId,
                     "label": "Confirm and Apply Rescheduling",
                 },
                 {
+                    "type": "confirm_replan",
+                    "requiresUserConfirmation": True,
+                    "planId": replan.planId,
+                    "label": "Apply Rescheduling Plan",
+                },
+                {
                     "type": "cancel_replan",
+                    "requiresUserConfirmation": False,
                     "planId": replan.planId,
                     "label": "Keep Current Schedule",
                 },

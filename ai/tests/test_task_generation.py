@@ -138,3 +138,41 @@ def test_task_generation_bedrock_error():
 
     with pytest.raises(TaskGenerationError, match="ValidationException"):
         generator.generate_tasks(SAMPLE_GOAL, goal_id="goal-001")
+
+
+def test_task_generation_empty_model_response_raises_parse_error():
+    """Verify empty model response string raises TaskParseError."""
+    mock_client = MockBedrockClient(default_response_text="")
+    generator = TaskGenerator(client=mock_client)
+
+    with pytest.raises(TaskParseError):
+        generator.generate_tasks(SAMPLE_GOAL, goal_id="goal-001")
+
+
+def test_task_generation_invalid_minutes_bounds_raises_schema_error():
+    """Verify estimatedMinutes less than 5 minutes raises TaskSchemaError."""
+    invalid_payload = {
+        "goalId": "goal-001",
+        "tasks": [
+            {
+                "title": "Quick task",
+                "parentId": None,
+                "estimatedMinutes": 2,  # minimum is 5
+                "scheduledDate": None
+            }
+        ]
+    }
+    mock_client = MockBedrockClient(default_response_text=json.dumps(invalid_payload))
+    generator = TaskGenerator(client=mock_client)
+
+    with pytest.raises(TaskSchemaError):
+        generator.generate_tasks(SAMPLE_GOAL, goal_id="goal-001")
+
+
+def test_task_generation_empty_goal_id_raises_value_error():
+    """Verify empty goal_id raises ValueError."""
+    mock_client = MockBedrockClient()
+    generator = TaskGenerator(client=mock_client)
+
+    with pytest.raises(ValueError, match="goalId cannot be empty"):
+        generator.generate_tasks(SAMPLE_GOAL, goal_id="   ")

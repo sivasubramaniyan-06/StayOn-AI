@@ -48,11 +48,35 @@ class ReplanChangeItem:
     taskId: str
     proposedDate: str
     currentDate: Optional[str] = None
+    changeType: str = "reschedule"
+    fromDate: Optional[str] = None
+    toDate: Optional[str] = None
     taskTitle: Optional[str] = None
     reason: Optional[str] = None
 
+    def __post_init__(self) -> None:
+        if self.fromDate is None and self.currentDate is not None:
+            self.fromDate = self.currentDate
+        if self.toDate is None and self.proposedDate is not None:
+            self.toDate = self.proposedDate
+
     def to_dict(self) -> Dict[str, Any]:
-        return {k: v for k, v in asdict(self).items() if v is not None}
+        d = {
+            "taskId": self.taskId,
+            "proposedDate": self.proposedDate,
+            "changeType": self.changeType,
+        }
+        if self.currentDate is not None:
+            d["currentDate"] = self.currentDate
+        if self.fromDate is not None:
+            d["fromDate"] = self.fromDate
+        if self.toDate is not None:
+            d["toDate"] = self.toDate
+        if self.taskTitle is not None:
+            d["taskTitle"] = self.taskTitle
+        if self.reason is not None:
+            d["reason"] = self.reason
+        return d
 
 
 @dataclass
@@ -190,8 +214,11 @@ class ReplanGenerator:
         changes = [
             ReplanChangeItem(
                 taskId=str(c["taskId"]),
-                proposedDate=str(c["proposedDate"]),
-                currentDate=c.get("currentDate"),
+                proposedDate=str(c.get("proposedDate") or c.get("toDate")),
+                currentDate=c.get("currentDate") or c.get("fromDate"),
+                changeType=str(c.get("changeType", "reschedule")),
+                fromDate=c.get("fromDate") or c.get("currentDate"),
+                toDate=c.get("toDate") or c.get("proposedDate"),
                 taskTitle=c.get("taskTitle"),
                 reason=c.get("reason"),
             )

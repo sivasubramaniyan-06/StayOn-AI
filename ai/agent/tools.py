@@ -28,6 +28,60 @@ class TaskBackendProtocol(Protocol):
         ...
 
 
+APPROVED_TOOLS: List[str] = [
+    "get_today_tasks",
+    "get_pending_tasks",
+    "create_tasks",
+    "replan_tasks",
+]
+
+TOOL_SCHEMAS: Dict[str, Dict[str, Any]] = {
+    "get_today_tasks": {
+        "description": "Returns today's tasks from a backend-provided context/interface.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "date": {"type": "string", "description": "Optional ISO date YYYY-MM-DD"}
+            },
+        },
+    },
+    "get_pending_tasks": {
+        "description": "Returns pending tasks from backend-provided context/interface.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "goal_id": {"type": "string", "description": "Optional goal ID to filter by"}
+            },
+        },
+    },
+    "create_tasks": {
+        "description": "Creates proposed tasks through the controlled backend interface.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "tasks": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                    "description": "List of task objects to create"
+                }
+            },
+            "required": ["tasks"],
+        },
+    },
+    "replan_tasks": {
+        "description": "Creates or applies a proposed revised plan through the controlled backend interface.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "replan_data": {"type": "object", "description": "Plan proposal with changes"},
+                "confirmed": {"type": "boolean", "description": "Must be True to apply mutations"}
+            },
+            "required": ["replan_data"],
+        },
+    },
+}
+
+
 class InMemoryTaskBackend:
     """In-memory mock backend for offline agent testing and local development."""
 

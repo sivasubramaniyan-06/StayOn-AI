@@ -116,6 +116,7 @@ class TaskGenerator:
         goal_input: Union[GeneratedGoal, Dict[str, Any]],
         extraction_input: Optional[Union[DocumentExtractionResult, Dict[str, Any]]] = None,
         goal_id: Optional[str] = None,
+        deadline: Optional[str] = None,
     ) -> GeneratedTaskList:
         """Generate structured tasks for a student goal.
 
@@ -123,18 +124,25 @@ class TaskGenerator:
             goal_input: GeneratedGoal or dict containing goal details.
             extraction_input: Optional DocumentExtractionResult or dict with source document context.
             goal_id: Optional goal ID (defaults to goal_input's id or 'goal-001').
+            deadline: Optional deadline constraint string.
 
         Returns:
             GeneratedTaskList containing typed GeneratedTaskItems.
         """
         if isinstance(goal_input, GeneratedGoal):
             goal_dict = goal_input.to_dict()
-            target_goal_id = goal_id or goal_dict.get("id") or "goal-001"
+            target_goal_id = goal_id or goal_dict.get("id") or goal_dict.get("goalId") or "goal-001"
         elif isinstance(goal_input, dict):
-            goal_dict = goal_input
+            goal_dict = dict(goal_input)
             target_goal_id = goal_id or goal_dict.get("id") or goal_dict.get("goalId") or "goal-001"
         else:
             raise TypeError(f"Expected GeneratedGoal or dict for goal_input, got {type(goal_input)}")
+
+        if not str(target_goal_id).strip():
+            raise ValueError("goalId cannot be empty")
+
+        if deadline and str(deadline).strip():
+            goal_dict["deadline"] = str(deadline).strip()
 
         if extraction_input is None:
             extraction_dict: Dict[str, Any] = {}
