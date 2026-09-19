@@ -8,6 +8,7 @@ import { getUserId } from "../middleware/auth";
 import {
     createDocument,
     getDocuments,
+    updateDocumentStatus,
 } from "../services/documentService";
 
 import { Document } from "../models/document";
@@ -126,6 +127,71 @@ export async function documentsHandler(
                 }),
             );
         }
+/*
+ * PATCH /documents/{documentId}
+ *
+ * Marks a successfully uploaded document as uploaded.
+ */
+if (event.httpMethod === "PATCH") {
+    const documentId =
+        event.pathParameters?.documentId;
+
+    if (!documentId) {
+        throw new AppError(
+            "INVALID_DOCUMENT_ID",
+            "Document ID is required",
+            400,
+        );
+    }
+
+    if (!event.body) {
+        throw new AppError(
+            "INVALID_REQUEST",
+            "Request body is required",
+            400,
+        );
+    }
+
+    let body: any;
+
+    try {
+        body = JSON.parse(event.body);
+    } catch {
+        throw new AppError(
+            "INVALID_JSON",
+            "Request body must contain valid JSON",
+            400,
+        );
+    }
+
+    if (body.status !== "uploaded") {
+        throw new AppError(
+            "INVALID_STATUS",
+            "Document status can only be changed to uploaded",
+            400,
+        );
+    }
+
+    const updatedDocument =
+        await updateDocumentStatus(
+            userId,
+            documentId,
+            "uploaded",
+        );
+
+    if (!updatedDocument) {
+        throw new AppError(
+            "NOT_FOUND",
+            "Document not found",
+            404,
+        );
+    }
+
+    return response(
+        200,
+        successResponse(updatedDocument),
+    );
+}
 
         return response(
             405,

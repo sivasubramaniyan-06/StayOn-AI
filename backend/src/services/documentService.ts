@@ -35,7 +35,8 @@ export async function getDocuments(
     const result = await dynamoDB.send(
         new QueryCommand({
             TableName: env.tableName,
-            KeyConditionExpression: "PK = :pk AND begins_with(SK, :sk)",
+            KeyConditionExpression:
+                "PK = :pk AND begins_with(SK, :sk)",
             ExpressionAttributeValues: {
                 ":pk": userPartitionKey(userId),
                 ":sk": "DOC#",
@@ -61,4 +62,38 @@ export async function getDocument(
     );
 
     return (result.Item as Document | undefined) ?? null;
+}
+
+export async function updateDocumentStatus(
+    userId: string,
+    documentId: string,
+    status: Document["status"],
+): Promise<Document | null> {
+    const existing = await getDocument(
+        userId,
+        documentId,
+    );
+
+    if (!existing) {
+        return null;
+    }
+
+    const updatedDocument: Document = {
+        ...existing,
+        status,
+        updatedAt: new Date().toISOString(),
+    };
+
+    await dynamoDB.send(
+        new PutCommand({
+            TableName: env.tableName,
+            Item: {
+                PK: userPartitionKey(userId),
+                SK: documentSortKey(documentId),
+                ...updatedDocument,
+            },
+        }),
+    );
+
+    return updatedDocument;
 }

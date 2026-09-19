@@ -36,9 +36,12 @@ export async function handler(
   if (path === "/goals") {
     return goalsHandler(event);
   }
-  if (path === "/documents") {
-    return documentsHandler(event);
-  }
+  if (
+  path === "/documents" ||
+  path.startsWith("/documents/")
+) {
+  return documentsHandler(event);
+}
 
   if (path === "/tasks") {
     return tasksHandler(event);
