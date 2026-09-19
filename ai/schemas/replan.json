@@ -4,10 +4,12 @@
   "type": "object",
   "properties": {
     "planId": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "summary": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "changes": {
       "type": "array",
@@ -15,7 +17,8 @@
         "type": "object",
         "properties": {
           "taskId": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "taskTitle": {
             "type": "string"
@@ -24,6 +27,15 @@
             "type": ["string", "null"]
           },
           "proposedDate": {
+            "type": "string"
+          },
+          "changeType": {
+            "type": "string"
+          },
+          "fromDate": {
+            "type": ["string", "null"]
+          },
+          "toDate": {
             "type": "string"
           },
           "reason": {

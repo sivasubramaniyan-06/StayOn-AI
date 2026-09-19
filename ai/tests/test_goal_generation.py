@@ -118,3 +118,27 @@ def test_goal_generation_bedrock_error():
 
     with pytest.raises(GoalGenerationError, match="AccessDeniedException"):
         generator.generate_goal(SAMPLE_EXTRACTION, document_id="doc-101")
+
+
+def test_goal_generation_empty_model_response_raises_parse_error():
+    """Verify empty model response string raises GoalParseError."""
+    mock_client = MockBedrockClient(default_response_text="")
+    generator = GoalGenerator(client=mock_client)
+
+    with pytest.raises(GoalParseError):
+        generator.generate_goal(SAMPLE_EXTRACTION, document_id="doc-101")
+
+
+def test_goal_generation_empty_title_raises_schema_error():
+    """Verify empty string title violates minLength schema requirement."""
+    invalid_payload = {
+        "title": "",
+        "description": "Valid description",
+        "deadline": "",
+        "documentId": "doc-101"
+    }
+    mock_client = MockBedrockClient(default_response_text=json.dumps(invalid_payload))
+    generator = GoalGenerator(client=mock_client)
+
+    with pytest.raises(GoalSchemaError):
+        generator.generate_goal(SAMPLE_EXTRACTION, document_id="doc-101")
