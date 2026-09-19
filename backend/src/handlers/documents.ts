@@ -2,6 +2,7 @@ import {
     APIGatewayProxyEvent,
     APIGatewayProxyResult,
 } from "aws-lambda";
+import { createDocumentUploadUrl } from "../services/s3Service";
 
 import { getUserId } from "../middleware/auth";
 import {
@@ -111,10 +112,17 @@ export async function documentsHandler(
 
             const createdDocument =
                 await createDocument(document);
+            const uploadUrl = await createDocumentUploadUrl(
+                document.s3Key,
+                document.contentType,
+            );
 
             return response(
                 201,
-                successResponse(createdDocument),
+                successResponse({
+                    document: createdDocument,
+                    uploadUrl,
+                }),
             );
         }
 
