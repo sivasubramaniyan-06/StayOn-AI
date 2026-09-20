@@ -300,6 +300,9 @@ class StayOnAgent:
             "content": [{"text": user_message}],
         })
 
+        raw_text: Optional[str] = None
+
+        # 1. Primary: Bedrock Converse
         try:
             response = self.client.converse(
                 messages=messages,
@@ -309,6 +312,24 @@ class StayOnAgent:
             )
             raw_text = extract_text_from_converse_response(response)
         except Exception:
+            raw_text = None
+
+        # 2. Secondary: Configured Gemini provider when Bedrock is unavailable
+        if not raw_text or not raw_text.strip():
+            try:
+                from ai.providers.text_generation import GeminiTextProvider
+                gemini_provider = GeminiTextProvider()
+                prompt = f"{SYSTEM_PROMPT}\n\nStudent: {user_message}\nStayOn AI:"
+                raw_text = gemini_provider.generate(
+                    prompt=prompt,
+                    max_tokens=1024,
+                    temperature=0.2,
+                )
+            except Exception:
+                raw_text = None
+
+        # 3. Graceful fallback when both providers are unavailable
+        if not raw_text or not raw_text.strip():
             raw_text = (
                 "I'm here to help you stay on track! You can ask me what to do today, "
                 "check your pending tasks, or ask me to replan your schedule if you fell behind."

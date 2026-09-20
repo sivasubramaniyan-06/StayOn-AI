@@ -217,6 +217,41 @@ export class StayOnAgentProvider implements AIProvider {
             };
         }
 
+        // If configured, attempt Gemini API when Bedrock is unavailable
+        const geminiKey = process.env.GEMINI_API_KEY;
+        if (geminiKey && geminiKey.trim().length > 0) {
+            try {
+                const model = process.env.GEMINI_MODEL || "gemini-3.6-flash";
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey.trim()}`;
+                const prompt = `You are the StayOn AI student companion. Help the student stay on track with their learning goals, tasks, and daily study habits.\nBe concise, encouraging, and clear.\n\nStudent: ${cleanMsg}\nStayOn AI:`;
+                const res = await fetch(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                    }),
+                });
+                if (res.ok) {
+                    const data: any = await res.json();
+                    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (typeof text === "string" && text.trim().length > 0) {
+                        return {
+                            reply: text.trim(),
+                            suggestedActions: [
+                                {
+                                    type: "view_today",
+                                    label: "Check Today's Tasks",
+                                    requiresUserConfirmation: false,
+                                },
+                            ],
+                        };
+                    }
+                }
+            } catch (err) {
+                console.warn("Gemini conversational provider error:", err);
+            }
+        }
+
         // General conversational response
         return {
             reply: "I'm here to help you stay on track! You can ask me what to do today, check your pending tasks, or ask me to replan your schedule if you fell behind.",
