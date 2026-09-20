@@ -18,6 +18,9 @@ const COGNITO_CLIENT_ID =
 
 const COGNITO_ENDPOINT = `https://cognito-idp.${COGNITO_REGION}.amazonaws.com/`;
 
+// Singleton in-flight refresh promise to prevent parallel refresh races
+let _refreshPromise: Promise<string | null> | null = null;
+
 interface CognitoAuthResult {
   AccessToken: string;
   ExpiresIn: number;
@@ -150,6 +153,7 @@ export const authService = {
 
   /**
    * Asynchronously retrieves a valid ID token, refreshing it if expired.
+   * Uses a singleton promise to prevent parallel refresh race conditions.
    */
   async getValidToken(): Promise<string | null> {
     const token = this.getToken();
@@ -157,7 +161,13 @@ export const authService = {
 
     const expiry = localStorage.getItem(TOKEN_EXPIRY_KEY);
     if (expiry && Date.now() > Number(expiry)) {
-      return await this.refreshSession();
+      // Deduplicate parallel refresh calls — all share one in-flight promise
+      if (!_refreshPromise) {
+        _refreshPromise = this.refreshSession().finally(() => {
+          _refreshPromise = null;
+        });
+      }
+      return await _refreshPromise;
     }
     return token;
   },
