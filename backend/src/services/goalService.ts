@@ -3,41 +3,65 @@ import {
   GetCommand,
   PutCommand,
   QueryCommand,
-  UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
 import { dynamoDB } from "../config/dynamodb";
 import { env } from "../config/env";
 import { Goal } from "../models/goal";
 import { goalSortKey, userPartitionKey } from "../utils/dynamoKeys";
+import { getTasks } from "./taskService";
 
 export async function createGoal(goal: Goal): Promise<Goal> {
+  const item: Goal = {
+    ...goal,
+    id: goal.goalId,
+    progress: goal.progress ?? 0,
+  };
+
   await dynamoDB.send(
     new PutCommand({
       TableName: env.tableName,
       Item: {
-        PK: userPartitionKey(goal.userId),
-        SK: goalSortKey(goal.goalId),
-        ...goal,
+        PK: userPartitionKey(item.userId),
+        SK: goalSortKey(item.goalId),
+        ...item,
       },
     }),
   );
 
-  return goal;
+  return item;
 }
 
 export async function getGoals(userId: string): Promise<Goal[]> {
-  const result = await dynamoDB.send(
-    new QueryCommand({
-      TableName: env.tableName,
-      KeyConditionExpression: "PK = :pk AND begins_with(SK, :sk)",
-      ExpressionAttributeValues: {
-        ":pk": userPartitionKey(userId),
-        ":sk": "GOAL#",
-      },
-    }),
-  );
+  const [goalsResult, tasks] = await Promise.all([
+    dynamoDB.send(
+      new QueryCommand({
+        TableName: env.tableName,
+        KeyConditionExpression: "PK = :pk AND begins_with(SK, :sk)",
+        ExpressionAttributeValues: {
+          ":pk": userPartitionKey(userId),
+          ":sk": "GOAL#",
+        },
+      }),
+    ),
+    getTasks(userId),
+  ]);
 
-  return (result.Items ?? []) as Goal[];
+  const rawGoals = (goalsResult.Items ?? []) as Goal[];
+
+  return rawGoals.map((g) => {
+    const goalTasks = tasks.filter((t) => t.goalId === g.goalId);
+    const totalTasks = goalTasks.length;
+    const completedTasks = goalTasks.filter((t) => t.status === "completed").length;
+    const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+    return {
+      ...g,
+      id: g.id || g.goalId,
+      totalTasks,
+      completedTasks,
+      progress,
+    };
+  });
 }
 
 export async function getGoal(

@@ -30,7 +30,22 @@ export async function goalsHandler(
     if (event.httpMethod === "GET") {
       const goals = await getGoals(userId);
 
-      return response(200, successResponse(goals));
+      const mapped = goals.map((g) => ({
+        id: g.id || g.goalId,
+        title: g.title,
+        ...(g.description !== undefined ? { description: g.description } : {}),
+        ...(g.deadline !== undefined ? { deadline: g.deadline } : {}),
+        ...(g.documentId !== undefined ? { documentId: g.documentId } : {}),
+        status: g.status,
+        progress: g.progress ?? 0,
+        totalTasks: g.totalTasks ?? 0,
+        completedTasks: g.completedTasks ?? 0,
+        createdAt: g.createdAt,
+      }));
+
+      return response(200, {
+        goals: mapped,
+      });
     }
 
     if (event.httpMethod === "POST") {
@@ -42,7 +57,16 @@ export async function goalsHandler(
         );
       }
 
-      const body = JSON.parse(event.body);
+      let body: any;
+      try {
+        body = JSON.parse(event.body);
+      } catch {
+        throw new AppError(
+          "INVALID_JSON",
+          "Request body must contain valid JSON",
+          400,
+        );
+      }
 
       if (
         typeof body.title !== "string" ||
@@ -56,22 +80,40 @@ export async function goalsHandler(
       }
 
       const now = new Date().toISOString();
+      const goalId = crypto.randomUUID();
 
       const goal: Goal = {
-        goalId: crypto.randomUUID(),
+        goalId,
+        id: goalId,
         userId,
         title: body.title.trim(),
         ...(typeof body.description === "string"
           ? { description: body.description.trim() }
           : {}),
+        ...(typeof body.deadline === "string" && body.deadline.trim()
+          ? { deadline: body.deadline.trim() }
+          : {}),
+        ...(typeof body.documentId === "string" && body.documentId.trim()
+          ? { documentId: body.documentId.trim() }
+          : {}),
         status: "active",
+        progress: 0,
         createdAt: now,
         updatedAt: now,
       };
 
       const createdGoal = await createGoal(goal);
 
-      return response(201, successResponse(createdGoal));
+      return response(201, {
+        id: createdGoal.id || createdGoal.goalId,
+        title: createdGoal.title,
+        ...(createdGoal.description !== undefined ? { description: createdGoal.description } : {}),
+        ...(createdGoal.deadline !== undefined ? { deadline: createdGoal.deadline } : {}),
+        ...(createdGoal.documentId !== undefined ? { documentId: createdGoal.documentId } : {}),
+        status: createdGoal.status,
+        progress: createdGoal.progress ?? 0,
+        createdAt: createdGoal.createdAt,
+      });
     }
 
     return response(

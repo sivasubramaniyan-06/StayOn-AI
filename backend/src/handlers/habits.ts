@@ -62,13 +62,14 @@ export async function habitsHandler(
                 );
             }
 
-            if (
-                typeof body.name !== "string" ||
-                body.name.trim().length === 0
-            ) {
+            const title =
+                (typeof body.title === "string" && body.title.trim()) ||
+                (typeof body.name === "string" && body.name.trim());
+
+            if (!title) {
                 throw new AppError(
                     "INVALID_NAME",
-                    "Habit name is required",
+                    "Habit title is required",
                     400,
                 );
             }
@@ -84,16 +85,26 @@ export async function habitsHandler(
                 );
             }
 
+            const targetMinutes =
+                typeof body.targetMinutes === "number"
+                    ? body.targetMinutes
+                    : typeof body.targetCount === "number"
+                      ? body.targetCount
+                      : undefined;
+
             const now = new Date().toISOString();
+            const habitId = crypto.randomUUID();
 
             const habit: Habit = {
-                habitId: crypto.randomUUID(),
+                habitId,
+                id: habitId,
                 userId,
-                name: body.name.trim(),
+                title,
+                name: title,
                 frequency: body.frequency,
-                ...(typeof body.targetCount === "number"
-                    ? { targetCount: body.targetCount }
-                    : {}),
+                targetMinutes,
+                targetCount: targetMinutes,
+                streak: 0,
                 currentStreak: 0,
                 longestStreak: 0,
                 createdAt: now,
@@ -102,10 +113,14 @@ export async function habitsHandler(
 
             const createdHabit = await createHabit(habit);
 
-            return response(
-                201,
-                successResponse(createdHabit),
-            );
+            return response(201, {
+                id: createdHabit.id || createdHabit.habitId,
+                title: createdHabit.title || createdHabit.name,
+                frequency: createdHabit.frequency,
+                targetMinutes: createdHabit.targetMinutes ?? createdHabit.targetCount ?? 0,
+                streak: createdHabit.streak ?? 0,
+                createdAt: createdHabit.createdAt,
+            });
         }
 
         if (event.httpMethod === "PATCH") {
@@ -139,30 +154,41 @@ export async function habitsHandler(
                 );
             }
 
+            // Check if this is a habit check-in ({ date, completed })
+            if (typeof body.completed === "boolean") {
+                const date = typeof body.date === "string" ? body.date : new Date().toISOString().slice(0, 10);
+                const { checkInHabit } = await import("../services/habitLogService");
+                const checkInResult = await checkInHabit(userId, habitId, date, body.completed);
+
+                return response(200, {
+                    id: checkInResult.id,
+                    completedToday: checkInResult.completedToday,
+                    streak: checkInResult.streak,
+                    ...(checkInResult.lastCompletedDate ? { lastCompletedDate: checkInResult.lastCompletedDate } : {}),
+                });
+            }
+
             const allowedUpdates: Partial<
                 Pick<
                     Habit,
+                    | "title"
                     | "name"
                     | "frequency"
+                    | "targetMinutes"
                     | "targetCount"
+                    | "streak"
                     | "currentStreak"
                     | "longestStreak"
                 >
             > = {};
 
-            if (body.name !== undefined) {
-                if (
-                    typeof body.name !== "string" ||
-                    body.name.trim().length === 0
-                ) {
-                    throw new AppError(
-                        "INVALID_NAME",
-                        "Habit name must be a non-empty string",
-                        400,
-                    );
-                }
+            const updateTitle =
+                (typeof body.title === "string" && body.title.trim()) ||
+                (typeof body.name === "string" && body.name.trim());
 
-                allowedUpdates.name = body.name.trim();
+            if (updateTitle) {
+                allowedUpdates.title = updateTitle;
+                allowedUpdates.name = updateTitle;
             }
 
             if (body.frequency !== undefined) {
@@ -180,48 +206,20 @@ export async function habitsHandler(
                 allowedUpdates.frequency = body.frequency;
             }
 
-            if (body.targetCount !== undefined) {
-                if (
-                    typeof body.targetCount !== "number" ||
-                    body.targetCount < 1
-                ) {
-                    throw new AppError(
-                        "INVALID_TARGET",
-                        "Target count must be a positive number",
-                        400,
-                    );
-                }
-
+            if (typeof body.targetMinutes === "number") {
+                allowedUpdates.targetMinutes = body.targetMinutes;
+                allowedUpdates.targetCount = body.targetMinutes;
+            } else if (typeof body.targetCount === "number") {
                 allowedUpdates.targetCount = body.targetCount;
+                allowedUpdates.targetMinutes = body.targetCount;
             }
 
             if (body.currentStreak !== undefined) {
-                if (
-                    typeof body.currentStreak !== "number" ||
-                    body.currentStreak < 0
-                ) {
-                    throw new AppError(
-                        "INVALID_STREAK",
-                        "Current streak must be a non-negative number",
-                        400,
-                    );
-                }
-
                 allowedUpdates.currentStreak = body.currentStreak;
+                allowedUpdates.streak = body.currentStreak;
             }
 
             if (body.longestStreak !== undefined) {
-                if (
-                    typeof body.longestStreak !== "number" ||
-                    body.longestStreak < 0
-                ) {
-                    throw new AppError(
-                        "INVALID_STREAK",
-                        "Longest streak must be a non-negative number",
-                        400,
-                    );
-                }
-
                 allowedUpdates.longestStreak = body.longestStreak;
             }
 
@@ -239,10 +237,14 @@ export async function habitsHandler(
                 );
             }
 
-            return response(
-                200,
-                successResponse(updatedHabit),
-            );
+            return response(200, {
+                id: updatedHabit.id || updatedHabit.habitId,
+                title: updatedHabit.title || updatedHabit.name,
+                frequency: updatedHabit.frequency,
+                targetMinutes: updatedHabit.targetMinutes ?? updatedHabit.targetCount ?? 0,
+                streak: updatedHabit.streak ?? 0,
+                updatedAt: updatedHabit.updatedAt,
+            });
         }
 
         return response(

@@ -43,10 +43,21 @@ export async function documentsHandler(
         if (event.httpMethod === "GET") {
             const documents = await getDocuments(userId);
 
-            return response(
-                200,
-                successResponse(documents),
-            );
+            const mapped = documents.map((doc) => {
+                const ext = doc.fileName.includes(".") ? doc.fileName.split(".").pop() : "pdf";
+                return {
+                    id: doc.id || doc.documentId,
+                    fileName: doc.fileName,
+                    fileType: doc.fileType || ext || "pdf",
+                    status: doc.status === "uploaded" ? "ready" : doc.status,
+                    extractedSummary: doc.extractedSummary || null,
+                    createdAt: doc.createdAt,
+                };
+            });
+
+            return response(200, {
+                documents: mapped,
+            });
         }
 
         /*
@@ -87,45 +98,58 @@ export async function documentsHandler(
                 );
             }
 
-            if (
-                typeof body.contentType !== "string" ||
-                body.contentType.trim().length === 0
-            ) {
-                throw new AppError(
-                    "INVALID_CONTENT_TYPE",
-                    "Content type is required",
-                    400,
-                );
+            const fileName = body.fileName.trim();
+            const ext = fileName.includes(".") ? fileName.split(".").pop() : "pdf";
+            const fileType = typeof body.fileType === "string" && body.fileType.trim().length > 0
+                ? body.fileType.trim().toLowerCase()
+                : (ext || "pdf").toLowerCase();
+
+            let contentType = typeof body.contentType === "string" && body.contentType.trim().length > 0
+                ? body.contentType.trim()
+                : undefined;
+
+            if (!contentType) {
+                if (fileType === "pdf") {
+                    contentType = "application/pdf";
+                } else if (fileType === "png") {
+                    contentType = "image/png";
+                } else if (fileType === "jpg" || fileType === "jpeg") {
+                    contentType = "image/jpeg";
+                } else {
+                    contentType = "application/octet-stream";
+                }
             }
 
             const now = new Date().toISOString();
+            const documentId = crypto.randomUUID();
 
             const document: Document = {
-                documentId: crypto.randomUUID(),
+                documentId,
+                id: documentId,
                 userId,
-                fileName: body.fileName.trim(),
-                contentType: body.contentType.trim(),
-                s3Key: `users/${userId}/documents/${crypto.randomUUID()}-${body.fileName.trim()}`,
+                fileName,
+                fileType,
+                contentType,
+                s3Key: `users/${userId}/documents/${crypto.randomUUID()}-${fileName}`,
                 status: "pending_upload",
                 createdAt: now,
                 updatedAt: now,
             };
 
-            const createdDocument =
-                await createDocument(document);
+            const createdDocument = await createDocument(document);
 
             const uploadUrl = await createDocumentUploadUrl(
                 document.s3Key,
                 document.contentType,
             );
 
-            return response(
-                201,
-                successResponse({
-                    document: createdDocument,
-                    uploadUrl,
-                }),
-            );
+            return response(201, {
+                id: createdDocument.id || createdDocument.documentId,
+                fileName: createdDocument.fileName,
+                uploadUrl,
+                status: createdDocument.status,
+                createdAt: createdDocument.createdAt,
+            });
         }
 /*
  * PATCH /documents/{documentId}

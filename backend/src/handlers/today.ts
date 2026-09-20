@@ -39,10 +39,7 @@ export async function todayHandler(
 
         const today = await getToday(userId);
 
-        return response(
-            200,
-            successResponse(today),
-        );
+        return response(200, today);
     } catch (error) {
         if (error instanceof AppError) {
             return response(

@@ -11,5 +11,5 @@ function requiredEnv(name: string): string {
 export const env = {
   awsRegion: process.env.AWS_REGION || "ap-south-1",
   documentsBucket: process.env.DOCUMENTS_BUCKET || "",
-  tableName: requiredEnv("TABLE_NAME"),
+  tableName: process.env.TABLE_NAME || "stayon-app-data",
 };
