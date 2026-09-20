@@ -176,3 +176,111 @@ def test_task_generation_empty_goal_id_raises_value_error():
 
     with pytest.raises(ValueError, match="goalId cannot be empty"):
         generator.generate_tasks(SAMPLE_GOAL, goal_id="   ")
+
+
+def test_valid_task_generation_gemini():
+    """Verify clean task generation with mock Gemini client."""
+    from ai.providers.gemini_client import MockGeminiClient
+
+    mock_client = MockGeminiClient(default_response_text=json.dumps(VALID_TASKS_PAYLOAD))
+    generator = TaskGenerator(client=mock_client)
+
+    result = generator.generate_tasks(SAMPLE_GOAL, goal_id="goal-001")
+
+    assert isinstance(result, GeneratedTaskList)
+    assert result.goalId == "goal-001"
+    assert len(result.tasks) == 4
+    assert isinstance(result.tasks[0], GeneratedTaskItem)
+    assert result.tasks[0].title == "Set up AWS CDK / SAM template for Lambda functions"
+    assert result.tasks[0].estimatedMinutes == 45
+    assert len(mock_client.call_history) == 1
+
+
+def test_task_generation_gemini_config_uses_response_json_schema():
+    """Verify Gemini task generation config uses response_json_schema and avoids response_schema."""
+    from ai.providers.gemini_client import MockGeminiClient
+
+    mock_client = MockGeminiClient(default_response_text=json.dumps(VALID_TASKS_PAYLOAD))
+    generator = TaskGenerator(provider="gemini", client=mock_client)
+
+    generator.generate_tasks(SAMPLE_GOAL, goal_id="goal-001")
+
+    assert len(mock_client.call_history) == 1
+    config = mock_client.call_history[0]["config"]
+    assert config.response_schema is None, "response_schema must be None to prevent 400 additional_properties error"
+    assert config.response_json_schema is not None, "response_json_schema must be used"
+    assert config.response_mime_type == "application/json"
+    assert config.response_json_schema["additionalProperties"] is False
+    assert "$schema" not in config.response_json_schema
+
+
+def test_task_generation_gemini_schema_validation():
+    """Verify tasks violating schema constraints raise TaskSchemaError via application validation."""
+    from ai.providers.gemini_client import MockGeminiClient
+
+    invalid_payload = {
+        "goalId": "goal-001",
+        "tasks": [
+            {
+                "title": "Too fast",
+                "parentId": None,
+                "estimatedMinutes": 1,  # minimum is 5
+                "scheduledDate": None
+            }
+        ]
+    }
+    mock_client = MockGeminiClient(default_response_text=json.dumps(invalid_payload))
+    generator = TaskGenerator(client=mock_client)
+
+    with pytest.raises(TaskSchemaError, match="less than the minimum of 5"):
+        generator.generate_tasks(SAMPLE_GOAL, goal_id="goal-001")
+
+
+def test_task_generation_gemini_malformed_json():
+    """Verify malformed JSON from Gemini raises TaskParseError."""
+    from ai.providers.gemini_client import MockGeminiClient
+
+    mock_client = MockGeminiClient(default_response_text="invalid json content")
+    generator = TaskGenerator(client=mock_client)
+
+    with pytest.raises(TaskParseError):
+        generator.generate_tasks(SAMPLE_GOAL, goal_id="goal-001")
+
+
+def test_task_generation_gemini_api_error():
+    """Verify Gemini API error is wrapped in TaskGenerationError."""
+    from ai.providers.gemini_client import GeminiError, MockGeminiClient
+
+    mock_client = MockGeminiClient()
+    mock_client.queue_response(GeminiError("Gemini unavailable"))
+    generator = TaskGenerator(client=mock_client)
+
+    with pytest.raises(TaskGenerationError, match="Gemini unavailable"):
+        generator.generate_tasks(SAMPLE_GOAL, goal_id="goal-001")
+
+
+def test_task_generator_provider_selection(monkeypatch):
+    """Verify provider selection between Bedrock and Gemini for TaskGenerator."""
+    from ai.planning import get_task_generator
+    from ai.providers.gemini_client import MockGeminiClient
+    from ai.providers.text_generation import BedrockTextProvider, GeminiTextProvider
+
+    # 1. Default without env is Bedrock
+    monkeypatch.delenv("AI_PROVIDER", raising=False)
+    gen_default = TaskGenerator(client=MockBedrockClient())
+    assert isinstance(gen_default.provider, BedrockTextProvider)
+
+    # 2. AI_PROVIDER=gemini uses GeminiTextProvider
+    monkeypatch.setenv("AI_PROVIDER", "gemini")
+    mock_gemini = MockGeminiClient()
+    gen_gemini = TaskGenerator(client=mock_gemini)
+    assert isinstance(gen_gemini.provider, GeminiTextProvider)
+
+    # 3. Explicit provider override
+    gen_explicit = get_task_generator(provider="gemini", client=mock_gemini)
+    assert isinstance(gen_explicit.provider, GeminiTextProvider)
+
+    # 4. Unsupported provider raises ValueError
+    with pytest.raises(ValueError, match="Unsupported AI_PROVIDER 'invalid_provider'"):
+        TaskGenerator(provider="invalid_provider")
+

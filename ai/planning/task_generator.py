@@ -1,6 +1,7 @@
 """Task Generator for StayOn AI.
 
-Decomposes student goals and document context into actionable, sized tasks.
+Decomposes student goals and document context into actionable, sized tasks
+using either Amazon Bedrock or Google Gemini.
 """
 
 from __future__ import annotations
@@ -13,14 +14,13 @@ from typing import Any, Dict, List, Optional, Union
 import jsonschema
 
 from ai.client import (
-    BedrockClientProtocol,
-    BedrockConverseClient,
     BedrockConverseError,
     clean_json_markdown,
-    extract_text_from_converse_response,
 )
 from ai.extraction.bedrock_extractor import DocumentExtractionResult
 from ai.planning.goal_generator import GeneratedGoal
+from ai.providers.gemini_client import GeminiError
+from ai.providers.text_generation import TextGenerationProtocol, get_text_provider
 
 AI_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_PROMPT_PATH = AI_DIR / "prompts" / "task_generation.txt"
@@ -72,13 +72,19 @@ class TaskGenerator:
 
     def __init__(
         self,
-        client: Optional[BedrockClientProtocol] = None,
+        client: Optional[Any] = None,
         prompt_template_path: Optional[Path] = None,
         schema_path: Optional[Path] = None,
         model_id: Optional[str] = None,
+        provider: Optional[str] = None,
     ) -> None:
-        self.client = client or BedrockConverseClient()
         self.model_id = model_id
+        self.provider: TextGenerationProtocol = get_text_provider(
+            provider=provider,
+            client=client,
+            model=model_id,
+        )
+        self.client = client or getattr(self.provider, "client", None)
         self.prompt_template_path = prompt_template_path or DEFAULT_PROMPT_PATH
         self.schema_path = schema_path or DEFAULT_SCHEMA_PATH
 
@@ -155,30 +161,21 @@ class TaskGenerator:
 
         prompt = self.render_prompt(goal_dict, extraction_dict, str(target_goal_id))
 
-        messages = [
-            {
-                "role": "user",
-                "content": [{"text": prompt}],
-            }
-        ]
-
-        inference_config = {
-            "temperature": 0.0,
-            "maxTokens": 2048,
-        }
-
         try:
-            response = self.client.converse(
-                messages=messages,
-                inference_config=inference_config,
-                model_id=self.model_id,
+            raw_text = self.provider.generate(
+                prompt=prompt,
+                schema=self._schema,
+                max_tokens=2048,
+                temperature=0.0,
+                model=self.model_id,
             )
         except BedrockConverseError as exc:
             raise TaskGenerationError(f"Bedrock call failed during task generation: {exc}") from exc
+        except GeminiError as exc:
+            raise TaskGenerationError(f"Gemini call failed during task generation: {exc}") from exc
         except Exception as exc:
             raise TaskGenerationError(f"Unexpected error during task generation: {exc}") from exc
 
-        raw_text = extract_text_from_converse_response(response)
         cleaned_json = clean_json_markdown(raw_text)
 
         try:

@@ -47,7 +47,7 @@ StayOn AI supports multiple AI providers for document extraction and reasoning. 
 | Provider Setting | Default | Description |
 |---|---|---|
 | `AI_PROVIDER=bedrock` | **Yes** | Uses Amazon Bedrock Converse API with `amazon.nova-2-lite-v1:0` in `ap-south-1`. |
-| `AI_PROVIDER=gemini` | No | Uses Google Gemini API via official `google-genai` SDK with `gemini-3.8-flash`. |
+| `AI_PROVIDER=gemini` | No | Uses Google Gemini API via official `google-genai` SDK with `gemini-3.6-flash`. |
 
 ### Environment Variables Matrix
 
@@ -58,7 +58,7 @@ StayOn AI supports multiple AI providers for document extraction and reasoning. 
 | `AWS_REGION` | `ap-south-1` | Bedrock | Primary AWS Region (Asia Pacific Mumbai) |
 | `AWS_PROFILE` | `stayon` | Bedrock | AWS CLI / SSO credential profile |
 | `RUN_LIVE_BEDROCK_TESTS` | `0` | Bedrock | Set to `1` to run live Bedrock tests via pytest |
-| `GEMINI_MODEL` | `gemini-3.8-flash` | Gemini | Google Gemini model identifier |
+| `GEMINI_MODEL` | `gemini-3.6-flash` | Gemini | Google Gemini model identifier |
 | `GEMINI_API_KEY` | *(None)* | Gemini | Google Gemini API key (required only for live API calls) |
 
 > [!WARNING]

@@ -142,3 +142,102 @@ def test_goal_generation_empty_title_raises_schema_error():
 
     with pytest.raises(GoalSchemaError):
         generator.generate_goal(SAMPLE_EXTRACTION, document_id="doc-101")
+
+
+def test_valid_goal_generation_gemini():
+    """Verify clean goal generation using mock Gemini client."""
+    from ai.providers.gemini_client import MockGeminiClient
+
+    mock_client = MockGeminiClient(default_response_text=json.dumps(VALID_GOAL_PAYLOAD))
+    generator = GoalGenerator(client=mock_client)
+
+    goal = generator.generate_goal(SAMPLE_EXTRACTION, document_id="doc-101")
+
+    assert isinstance(goal, GeneratedGoal)
+    assert goal.title == "Complete CS 480 Cloud Computing Project"
+    assert goal.deadline == "2026-11-15"
+    assert goal.documentId == "doc-101"
+    assert len(mock_client.call_history) == 1
+
+
+def test_goal_generation_gemini_config_uses_response_json_schema():
+    """Verify Gemini goal generation uses response_json_schema and avoids response_schema."""
+    from ai.providers.gemini_client import MockGeminiClient
+
+    mock_client = MockGeminiClient(default_response_text=json.dumps(VALID_GOAL_PAYLOAD))
+    generator = GoalGenerator(provider="gemini", client=mock_client)
+
+    generator.generate_goal(SAMPLE_EXTRACTION, document_id="doc-101")
+
+    assert len(mock_client.call_history) == 1
+    config = mock_client.call_history[0]["config"]
+    assert config.response_schema is None, "response_schema must be None to prevent 400 additional_properties error"
+    assert config.response_json_schema is not None, "response_json_schema must be used"
+    assert config.response_mime_type == "application/json"
+    assert config.response_json_schema["additionalProperties"] is False
+    assert "$schema" not in config.response_json_schema
+
+
+def test_goal_generation_gemini_schema_validation():
+    """Verify Gemini goal schema violation raises GoalSchemaError via application validation."""
+    from ai.providers.gemini_client import MockGeminiClient
+
+    invalid_payload = {
+        "title": "Incomplete Goal",
+        # missing description, deadline, documentId
+    }
+    mock_client = MockGeminiClient(default_response_text=json.dumps(invalid_payload))
+    generator = GoalGenerator(client=mock_client)
+
+    with pytest.raises(GoalSchemaError, match="'description' is a required property"):
+        generator.generate_goal(SAMPLE_EXTRACTION, document_id="doc-101")
+
+
+def test_goal_generation_gemini_malformed_json():
+    """Verify malformed JSON from Gemini raises GoalParseError."""
+    from ai.providers.gemini_client import MockGeminiClient
+
+    mock_client = MockGeminiClient(default_response_text="not a valid json string")
+    generator = GoalGenerator(client=mock_client)
+
+    with pytest.raises(GoalParseError):
+        generator.generate_goal(SAMPLE_EXTRACTION, document_id="doc-101")
+
+
+def test_goal_generation_gemini_api_error():
+    """Verify Gemini API error is wrapped in GoalGenerationError."""
+    from ai.providers.gemini_client import GeminiError, MockGeminiClient
+
+    mock_client = MockGeminiClient()
+    mock_client.queue_response(GeminiError("Gemini quota exceeded"))
+    generator = GoalGenerator(client=mock_client)
+
+    with pytest.raises(GoalGenerationError, match="Gemini quota exceeded"):
+        generator.generate_goal(SAMPLE_EXTRACTION, document_id="doc-101")
+
+
+def test_goal_generator_provider_selection(monkeypatch):
+    """Verify provider selection between Bedrock and Gemini."""
+    from ai.planning import get_goal_generator
+    from ai.providers.gemini_client import MockGeminiClient
+    from ai.providers.text_generation import BedrockTextProvider, GeminiTextProvider
+
+    # 1. Default without env is Bedrock
+    monkeypatch.delenv("AI_PROVIDER", raising=False)
+    gen_default = GoalGenerator(client=MockBedrockClient())
+    assert isinstance(gen_default.provider, BedrockTextProvider)
+
+    # 2. AI_PROVIDER=gemini uses GeminiTextProvider
+    monkeypatch.setenv("AI_PROVIDER", "gemini")
+    mock_gemini = MockGeminiClient()
+    gen_gemini = GoalGenerator(client=mock_gemini)
+    assert isinstance(gen_gemini.provider, GeminiTextProvider)
+
+    # 3. Explicit provider override
+    gen_explicit = get_goal_generator(provider="gemini", client=mock_gemini)
+    assert isinstance(gen_explicit.provider, GeminiTextProvider)
+
+    # 4. Unsupported provider raises ValueError
+    with pytest.raises(ValueError, match="Unsupported AI_PROVIDER 'unknown'"):
+        GoalGenerator(provider="unknown")
+
