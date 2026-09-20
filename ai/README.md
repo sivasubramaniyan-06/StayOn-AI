@@ -38,20 +38,34 @@ User Confirmation (strict human-in-the-loop)
 
 ---
 
-## 2. Bedrock Model & Environment Configuration
+## 2. AI Provider & Environment Configuration
 
-All configuration is environment- and config-driven. No credentials or AWS account IDs are hardcoded.
+StayOn AI supports multiple AI providers for document extraction and reasoning. The default provider remains **Amazon Bedrock**, with **Google Gemini** available as a fully supported second provider via the modern `google-genai` SDK.
 
-### Configuration Defaults & Environment Variables
+### Provider Selection (`AI_PROVIDER`)
 
-| Variable | Default Value | Description |
+| Provider Setting | Default | Description |
 |---|---|---|
-| `BEDROCK_MODEL_ID` | `amazon.nova-2-lite-v1:0` | Amazon Bedrock foundation model ID |
-| `AWS_REGION` | `ap-south-1` | Primary AWS Region (Asia Pacific Mumbai) |
-| `AWS_PROFILE` | `stayon` | AWS CLI / SSO credential profile |
-| `RUN_LIVE_BEDROCK_TESTS` | `0` | Set to `1` to run live Bedrock tests via pytest |
+| `AI_PROVIDER=bedrock` | **Yes** | Uses Amazon Bedrock Converse API with `amazon.nova-2-lite-v1:0` in `ap-south-1`. |
+| `AI_PROVIDER=gemini` | No | Uses Google Gemini API via official `google-genai` SDK with `gemini-3.8-flash`. |
 
-AWS authentication follows standard `boto3` credential resolution (Environment variables -> AWS SSO / `~/.aws/credentials` -> IAM Roles).
+### Environment Variables Matrix
+
+| Variable | Default Value | Provider | Description |
+|---|---|---|---|
+| `AI_PROVIDER` | `bedrock` | Both | Selects active AI provider (`bedrock` or `gemini`) |
+| `BEDROCK_MODEL_ID` | `amazon.nova-2-lite-v1:0` | Bedrock | Amazon Bedrock foundation model ID |
+| `AWS_REGION` | `ap-south-1` | Bedrock | Primary AWS Region (Asia Pacific Mumbai) |
+| `AWS_PROFILE` | `stayon` | Bedrock | AWS CLI / SSO credential profile |
+| `RUN_LIVE_BEDROCK_TESTS` | `0` | Bedrock | Set to `1` to run live Bedrock tests via pytest |
+| `GEMINI_MODEL` | `gemini-3.8-flash` | Gemini | Google Gemini model identifier |
+| `GEMINI_API_KEY` | *(None)* | Gemini | Google Gemini API key (required only for live API calls) |
+
+> [!WARNING]
+> **SECURITY NOTICE: NEVER COMMIT API KEYS OR CREDENTIALS**
+> - Never hardcode or commit `GEMINI_API_KEY`, AWS secrets, or credentials into repository files.
+> - Store keys in local uncommitted environment files (see `.env.example`) or export them directly in your shell environment.
+> - All standard unit tests run completely offline with mocked clients and require no API keys.
 
 ---
 
@@ -71,9 +85,14 @@ ai/
 │   ├── task_generation.json      # Validates task lists and minute estimates
 │   └── replan.json               # Validates proposed plan changes
 │
-├── extraction/                   # Document understanding pipeline
+├── providers/                    # AI Provider client abstractions
 │   ├── __init__.py
-│   └── bedrock_extractor.py      # Bedrock Converse PDF/text extractor
+│   └── gemini_client.py          # Modern google-genai client & MockGeminiClient
+│
+├── extraction/                   # Document understanding pipeline
+│   ├── __init__.py               # Provider factory get_document_extractor()
+│   ├── bedrock_extractor.py      # Bedrock Converse PDF/text extractor
+│   └── gemini_extractor.py       # Google Gemini native PDF/text extractor
 │
 ├── planning/                     # Academic planning & breakdown
 │   ├── __init__.py
@@ -86,17 +105,19 @@ ai/
 │   ├── agent.py                  # Intent classification & action coordinator
 │   └── tools.py                  # Approved tools & backend adapter protocol
 │
-├── tests/                        # Comprehensive test suite (53 passed, 1 skipped)
+├── tests/                        # Comprehensive test suite (70 passed, 2 skipped)
 │   ├── __init__.py
-│   ├── test_extraction.py        # PDF bytes, text, & schema failure tests
+│   ├── test_extraction.py        # Bedrock PDF bytes, text, & schema failure tests
+│   ├── test_gemini_extraction.py # Gemini PDF bytes, text, schema, & mock tests
 │   ├── test_goal_generation.py   # Goal creation & validation tests
 │   ├── test_task_generation.py   # Task generation, hierarchy, & bounds tests
 │   ├── test_replanning.py        # Replan, agent intents, & safety tests
-│   └── test_live_bedrock.py      # Opt-in live Bedrock integration test
+│   ├── test_live_bedrock.py      # Opt-in live Bedrock integration test
+│   └── test_live_gemini.py       # Opt-in live Gemini integration test
 │
 ├── client.py                     # Bedrock Converse wrapper & MockBedrockClient
 ├── live_test.py                  # Standalone CLI for live Bedrock verification
-├── requirements.txt              # Dependencies: boto3, jsonschema, pytest
+├── requirements.txt              # Dependencies: boto3, google-genai, jsonschema, pytest
 └── README.md                     # Comprehensive documentation
 ```
 
@@ -105,11 +126,29 @@ ai/
 ## 4. Subsystems Breakdown
 
 ### A. Document Understanding (`ai/extraction/`)
-Extracts academic metadata from PDFs or text using Amazon Bedrock Converse API.
-- **Native PDF Support (`extract_document`)**: Passes raw PDF bytes as a Bedrock Converse document content block:
-  ```json
-  {"document": {"format": "pdf", "name": "syllabus", "source": {"bytes": b"..."}}}
-  ```
+Extracts academic metadata from PDFs or text using Amazon Bedrock or Google Gemini.
+
+1. **Bedrock Converse Extractor (`BedrockDocumentExtractor`)**:
+   - Native PDF support via Converse document content blocks.
+   - Zero hallucination prompt engineering.
+   - Validation against `ai/schemas/document_extraction.json`.
+
+2. **Google Gemini Extractor (`GeminiDocumentExtractor`)**:
+   - Native PDF support via `types.Part.from_bytes(data=..., mime_type="application/pdf")`.
+   - Structured JSON output via `GenerateContentConfig(response_mime_type="application/json", response_schema=...)`.
+   - Reuses existing prompt template and `document_extraction.json` schema.
+   - Raises provider-specific exceptions: `GeminiError`, `GeminiExtractionError`, `GeminiExtractionParseError`, `GeminiExtractionSchemaError`.
+
+3. **Provider Factory (`get_document_extractor`)**:
+   - Automatically instantiates the configured extractor based on `AI_PROVIDER` (defaults to Bedrock).
+   ```python
+   from ai.extraction import get_document_extractor
+
+   # Uses Bedrock by default, or Gemini if AI_PROVIDER=gemini
+   extractor = get_document_extractor()
+   result = extractor.extract_document(pdf_bytes, "syllabus.pdf")
+   ```
+
 - **Text Support (`extract`)**: Accepts pre-extracted text strings.
 - **Output Schema**: Conforms to `schemas/document_extraction.json` (`title`, `deadline`, `requirements`, `action_items`).
 
@@ -207,60 +246,55 @@ Generates structured change proposals when schedules slip or life events occur.
 
 ## 5. Offline Testing & Verification
 
-The test suite requires **no AWS credentials**, **no active Bedrock connection**, and **no network access**.
+The primary test suite requires **no AWS credentials**, **no Gemini API key**, and **no network access**.
 
 ```bash
-# Run all tests offline
+# Run all tests offline (both Bedrock and Gemini test suites)
 .venv/bin/pytest -q
+
+# Run only Gemini extraction tests offline
+.venv/bin/pytest -q ai/tests/test_gemini_extraction.py
+
+# Run only Bedrock extraction tests offline
+.venv/bin/pytest -q ai/tests/test_extraction.py
 ```
+
 **Results**:
-- 53 unit tests passing across extraction, goal generation, task breakdown, replanning, and agent safety.
-- 1 test cleanly skipped (`test_live_bedrock.py` when live flags are not set).
+- **70 unit tests passing** across Bedrock extraction, Gemini extraction, goal generation, task breakdown, replanning, and agent safety.
+- **2 tests cleanly skipped** (`test_live_bedrock.py` and `test_live_gemini.py`) when live credentials are not set.
 
 ### Key Test Scenarios Covered
-1. Valid and malformed PDF/document extraction.
-2. Valid and malformed goal generation (rejection of empty fields).
-3. Valid and malformed task generation (minute bounds, parent-child links).
-4. Read-only conversational agent queries (no confirmation required).
-5. Mutating conversational requests (mandatory confirmation flag).
-6. Replanning proposals with structured `changeType`, `fromDate`, and `toDate`.
-7. Empty model responses, malformed JSON, and Bedrock client exceptions.
+1. Valid and malformed PDF/document extraction for both Bedrock and Gemini.
+2. Gemini native PDF bytes handling, empty bytes rejection, and MIME validation.
+3. Gemini response parsing, markdown code-fence stripping, and schema validation.
+4. Provider factory switching between `bedrock` and `gemini`.
+5. Valid and malformed goal generation (rejection of empty fields).
+6. Valid and malformed task generation (minute bounds, parent-child links).
+7. Read-only conversational agent queries (no confirmation required).
+8. Mutating conversational requests (mandatory confirmation flag).
+9. Replanning proposals with structured `changeType`, `fromDate`, and `toDate`.
+10. Empty model responses, malformed JSON, and client exception wrapping.
 
 ---
 
-## 6. Live Bedrock Diagnostic Utility
+## 6. Live Provider Diagnostics & Integration Tests
 
+### Live Bedrock Diagnostic
 To verify AWS Bedrock once AWS finishes account verification, run the standalone diagnostic tool:
-
 ```bash
-# Verify live Bedrock access using profile 'stayon' and region 'ap-south-1'
 python3 ai/live_test.py
 ```
-
-### Diagnostic Output Example
-When credentials are valid but AWS account verification is pending:
-```
-============================================================
-StayOn AI — Amazon Bedrock Live Diagnostic Test
-============================================================
-Region:    ap-south-1
-Model ID:  amazon.nova-2-lite-v1:0
-Profile:   stayon
-Testing Bedrock Converse API...
-
-[ACCESS VERIFICATION PENDING]
-AWS Error Code: AccessDeniedException
-Message: Your account is currently being verified. Verification normally takes less than 2 hours.
-
-Live Bedrock test halted cleanly. No fake calls were made.
-The architecture is ready to work live once AWS verification completes.
-============================================================
-```
-
-To run the pytest integration test against live Bedrock once verified:
+To run the Bedrock live pytest:
 ```bash
 RUN_LIVE_BEDROCK_TESTS=1 .venv/bin/pytest ai/tests/test_live_bedrock.py
 ```
+
+### Live Gemini Integration Test
+To run the live Gemini test against Google's API:
+```bash
+GEMINI_API_KEY="your-api-key-here" .venv/bin/pytest -q ai/tests/test_live_gemini.py
+```
+*Note: If `GEMINI_API_KEY` is not present, this test skips automatically without failing.*
 
 ---
 
@@ -270,11 +304,12 @@ Person 4 implements the API Gateway and AWS Lambda CRUD handlers. The AI layer i
 
 ### 1. Document Extraction Handler (`POST /documents`)
 ```python
-from ai.extraction import BedrockDocumentExtractor
+from ai.extraction import get_document_extractor
 
 def lambda_handler(event, context):
     s3_bytes = download_from_s3(event["s3Key"])
-    extractor = BedrockDocumentExtractor()
+    # get_document_extractor respects AI_PROVIDER env var (bedrock or gemini)
+    extractor = get_document_extractor()
     result = extractor.extract_document(
         document_bytes=s3_bytes,
         file_name=event["fileName"],
