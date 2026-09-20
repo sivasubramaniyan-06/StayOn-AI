@@ -215,7 +215,7 @@ export const Login: React.FC = () => {
           <a href="#contact" onClick={(e) => e.preventDefault()} className="hover:text-white transition-colors">Contact</a>
           
           <button
-            onClick={handleLogin}
+            onClick={() => setError('Self-service registration is restricted for this demo. Please log in using demo@stayon.ai.')}
             className="px-7 py-2.5 rounded-full border border-white/40 text-white font-semibold hover:bg-white/10 transition-all shadow-sm cursor-pointer"
           >
             Sign Up
@@ -302,13 +302,13 @@ export const Login: React.FC = () => {
                 </div>
 
                 <div className="text-right mt-2">
-                  <a
-                    href="#forgot"
-                    onClick={(e) => { e.preventDefault(); alert('Cognito password reset flow initiated'); }}
+                  <button
+                    type="button"
+                    onClick={() => setError('Self-service password reset is disabled for this demo pool. Please use demo@stayon.ai or contact the administrator.')}
                     className="text-xs font-semibold text-purple-600 hover:underline"
                   >
                     Forgot password?
-                  </a>
+                  </button>
                 </div>
               </div>
 
@@ -335,7 +335,7 @@ export const Login: React.FC = () => {
             <div className="space-y-3">
               <button
                 type="button"
-                onClick={handleLogin}
+                onClick={() => setError('Social login (Google) is not configured for this Cognito User Pool. Please log in with your email and password.')}
                 className="w-full py-3 px-4 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold rounded-2xl transition-all flex items-center justify-center gap-3 shadow-sm cursor-pointer"
               >
                 <svg className="w-4 h-4" viewBox="0 0 24 24">
@@ -349,7 +349,7 @@ export const Login: React.FC = () => {
 
               <button
                 type="button"
-                onClick={handleLogin}
+                onClick={() => setError('Social login (GitHub) is not configured for this Cognito User Pool. Please log in with your email and password.')}
                 className="w-full py-3 px-4 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold rounded-2xl transition-all flex items-center justify-center gap-3 shadow-sm cursor-pointer"
               >
                 <svg className="w-4 h-4 fill-slate-800" viewBox="0 0 24 24">
@@ -362,9 +362,13 @@ export const Login: React.FC = () => {
             {/* Sign Up Footer Link */}
             <p className="mt-6 text-center text-xs text-slate-500 font-medium">
               Don't have an account?{' '}
-              <a href="#signup" onClick={(e) => { e.preventDefault(); handleLogin(e); }} className="text-purple-600 font-bold hover:underline">
+              <button
+                type="button"
+                onClick={() => setError('Self-service registration is restricted for this demo. Please log in using demo@stayon.ai.')}
+                className="text-purple-600 font-bold hover:underline"
+              >
                 Sign up
-              </a>
+              </button>
             </p>
           </div>
         </div>
