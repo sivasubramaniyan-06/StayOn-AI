@@ -2,7 +2,7 @@ import { apiClient } from './api';
 import { TodayResponse, Task, CreateTaskRequest, UpdateTaskRequest } from '../types';
 import { mockToday } from '../mock/data';
 
-const ENABLE_MOCK = import.meta.env.VITE_ENABLE_MOCK_FALLBACK !== 'false';
+const ENABLE_MOCK = import.meta.env.VITE_ENABLE_MOCK_FALLBACK === 'true';
 
 let inMemoryToday: TodayResponse = { ...mockToday };
 

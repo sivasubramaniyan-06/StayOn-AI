@@ -2,7 +2,7 @@ import { apiClient } from './api';
 import { Goal, CreateGoalRequest } from '../types';
 import { mockGoals } from '../mock/data';
 
-const ENABLE_MOCK = import.meta.env.VITE_ENABLE_MOCK_FALLBACK !== 'false';
+const ENABLE_MOCK = import.meta.env.VITE_ENABLE_MOCK_FALLBACK === 'true';
 
 let inMemoryGoals: Goal[] = [...mockGoals];
 
