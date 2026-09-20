@@ -1,6 +1,6 @@
 """Gemini client abstraction for StayOn AI using the modern google-genai SDK.
 
-Supports Google Gemini models (defaulting to gemini-3.8-flash).
+Supports Google Gemini models (defaulting to gemini-3.6-flash).
 Provides an injectable interface and MockGeminiClient for offline testing.
 """
 
@@ -10,7 +10,7 @@ import json
 import os
 from typing import Any, List, Optional, Protocol, Union
 
-DEFAULT_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+DEFAULT_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
 
 class GeminiError(Exception):

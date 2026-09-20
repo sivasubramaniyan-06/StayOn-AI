@@ -1,6 +1,7 @@
 """Goal Generator for StayOn AI.
 
-Converts extracted document information into a structured student goal.
+Converts extracted document information into a structured student goal
+using either Amazon Bedrock or Google Gemini.
 """
 
 from __future__ import annotations
@@ -13,13 +14,12 @@ from typing import Any, Dict, Optional, Union
 import jsonschema
 
 from ai.client import (
-    BedrockClientProtocol,
-    BedrockConverseClient,
     BedrockConverseError,
     clean_json_markdown,
-    extract_text_from_converse_response,
 )
 from ai.extraction.bedrock_extractor import DocumentExtractionResult
+from ai.providers.gemini_client import GeminiError
+from ai.providers.text_generation import TextGenerationProtocol, get_text_provider
 
 AI_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_PROMPT_PATH = AI_DIR / "prompts" / "goal_generation.txt"
@@ -59,13 +59,19 @@ class GoalGenerator:
 
     def __init__(
         self,
-        client: Optional[BedrockClientProtocol] = None,
+        client: Optional[Any] = None,
         prompt_template_path: Optional[Path] = None,
         schema_path: Optional[Path] = None,
         model_id: Optional[str] = None,
+        provider: Optional[str] = None,
     ) -> None:
-        self.client = client or BedrockConverseClient()
         self.model_id = model_id
+        self.provider: TextGenerationProtocol = get_text_provider(
+            provider=provider,
+            client=client,
+            model=model_id,
+        )
+        self.client = client or getattr(self.provider, "client", None)
         self.prompt_template_path = prompt_template_path or DEFAULT_PROMPT_PATH
         self.schema_path = schema_path or DEFAULT_SCHEMA_PATH
 
@@ -108,7 +114,7 @@ class GoalGenerator:
 
         Raises:
             ValueError: If document_id is missing or extraction data is empty.
-            GoalGenerationError: If Bedrock call fails.
+            GoalGenerationError: If Bedrock or Gemini API call fails.
             GoalParseError: If model output is not valid JSON.
             GoalSchemaError: If JSON schema validation fails.
         """
@@ -124,30 +130,21 @@ class GoalGenerator:
 
         prompt = self.render_prompt(extraction_dict, document_id.strip())
 
-        messages = [
-            {
-                "role": "user",
-                "content": [{"text": prompt}],
-            }
-        ]
-
-        inference_config = {
-            "temperature": 0.0,
-            "maxTokens": 1024,
-        }
-
         try:
-            response = self.client.converse(
-                messages=messages,
-                inference_config=inference_config,
-                model_id=self.model_id,
+            raw_text = self.provider.generate(
+                prompt=prompt,
+                schema=self._schema,
+                max_tokens=1024,
+                temperature=0.0,
+                model=self.model_id,
             )
         except BedrockConverseError as exc:
             raise GoalGenerationError(f"Bedrock call failed during goal generation: {exc}") from exc
+        except GeminiError as exc:
+            raise GoalGenerationError(f"Gemini call failed during goal generation: {exc}") from exc
         except Exception as exc:
             raise GoalGenerationError(f"Unexpected error during goal generation: {exc}") from exc
 
-        raw_text = extract_text_from_converse_response(response)
         cleaned_json = clean_json_markdown(raw_text)
 
         try:
