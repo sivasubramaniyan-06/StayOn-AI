@@ -5,6 +5,7 @@ import {
   BookOpen, CheckSquare, X
 } from 'lucide-react';
 import { tasksService } from '../services/tasks';
+import { goalsService } from '../services/goals';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { LoadingState } from '../components/ui/LoadingState';
@@ -349,6 +350,11 @@ export const Tasks: React.FC = () => {
     queryFn: () => tasksService.getTasks(),
   });
 
+  const { data: goals } = useQuery({
+    queryKey: ['goals'],
+    queryFn: () => goalsService.getGoals(),
+  });
+
   const toggleTaskMutation = useMutation({
     mutationFn: ({ id, completed }: { id: string; completed: boolean }) =>
       tasksService.updateTask(id, { status: completed ? 'completed' : 'pending' }),
@@ -385,12 +391,24 @@ export const Tasks: React.FC = () => {
   });
 
   const createTaskMutation = useMutation({
-    mutationFn: () =>
-      tasksService.createTask({
-        title: taskTitle,
-        estimatedMinutes: totalMins > 0 ? totalMins : 30,
+    mutationFn: () => {
+      const activeGoalId =
+        goalFilter !== 'all'
+          ? goalFilter
+          : (goals && goals.length > 0
+              ? goals[0].id
+              : (tasks && tasks.length > 0 && tasks[0].goalId
+                  ? tasks[0].goalId
+                  : 'goal-001'));
+
+      return tasksService.createTask({
+        goalId: activeGoalId,
+        title: taskTitle.trim(),
+        parentId: null,
+        estimatedMinutes: totalMins > 0 ? totalMins : 70,
         scheduledDate: TODAY_ISO,
-      }),
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       queryClient.invalidateQueries({ queryKey: ['today'] });
@@ -420,9 +438,10 @@ export const Tasks: React.FC = () => {
   // ── unique goals for filter dropdown ──
   const uniqueGoals = useMemo(() => {
     const map = new Map<string, string>();
+    (goals ?? []).forEach(g => { if (g.id && g.title) map.set(g.id, g.title); });
     allTasks.forEach(t => { if (t.goalId && t.goalTitle) map.set(t.goalId, t.goalTitle); });
     return Array.from(map.entries()); // [id, title][]
-  }, [allTasks]);
+  }, [allTasks, goals]);
 
   // ── base tasks for current tab ──
   const tabTasks = useMemo(() => {
