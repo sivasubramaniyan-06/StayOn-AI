@@ -37,9 +37,28 @@ export async function tasksHandler(
          * GET /tasks
          */
         if (event.httpMethod === "GET") {
-            const tasks = await getTasks(userId);
+            const goalId = event.queryStringParameters?.goalId;
+            const date = event.queryStringParameters?.date;
 
-            return response(200, successResponse(tasks));
+            const tasks = await getTasks(userId, {
+                ...(goalId ? { goalId } : {}),
+                ...(date ? { date } : {}),
+            });
+
+            const mapped = tasks.map((t) => ({
+                id: t.id || t.taskId,
+                goalId: t.goalId,
+                title: t.title,
+                parentId: t.parentId ?? null,
+                status: t.status,
+                scheduledDate: t.scheduledDate || t.dueDate || null,
+                estimatedMinutes: t.estimatedMinutes ?? 0,
+                createdAt: t.createdAt,
+            }));
+
+            return response(200, {
+                tasks: mapped,
+            });
         }
 
         /*
@@ -102,35 +121,48 @@ export async function tasksHandler(
             }
 
             const now = new Date().toISOString();
+            const taskId = crypto.randomUUID();
+            const scheduledDate =
+                typeof body.scheduledDate === "string"
+                    ? body.scheduledDate
+                    : typeof body.dueDate === "string"
+                      ? body.dueDate
+                      : undefined;
 
             const task: Task = {
-                taskId: crypto.randomUUID(),
+                taskId,
+                id: taskId,
                 goalId: body.goalId.trim(),
                 userId,
                 title: body.title.trim(),
-
+                parentId: body.parentId !== undefined ? body.parentId : null,
+                scheduledDate,
+                dueDate: scheduledDate,
+                estimatedMinutes:
+                    typeof body.estimatedMinutes === "number"
+                        ? body.estimatedMinutes
+                        : undefined,
                 ...(typeof body.description === "string"
                     ? { description: body.description.trim() }
                     : {}),
-
                 status: "pending",
-
-                priority:
-                    body.priority === undefined
-                        ? "medium"
-                        : body.priority,
-
-                ...(typeof body.dueDate === "string"
-                    ? { dueDate: body.dueDate }
-                    : {}),
-
+                priority: body.priority || "medium",
                 createdAt: now,
                 updatedAt: now,
             };
 
             const createdTask = await createTask(task);
 
-            return response(201, successResponse(createdTask));
+            return response(201, {
+                id: createdTask.id || createdTask.taskId,
+                goalId: createdTask.goalId,
+                title: createdTask.title,
+                parentId: createdTask.parentId ?? null,
+                scheduledDate: createdTask.scheduledDate || null,
+                estimatedMinutes: createdTask.estimatedMinutes ?? 0,
+                status: createdTask.status,
+                createdAt: createdTask.createdAt,
+            });
         }
 
         /*
@@ -204,11 +236,14 @@ export async function tasksHandler(
             const updates: Partial<
                 Pick<
                     Task,
-                    "title" |
-                    "description" |
-                    "status" |
-                    "priority" |
-                    "dueDate"
+                    | "title"
+                    | "description"
+                    | "status"
+                    | "priority"
+                    | "dueDate"
+                    | "scheduledDate"
+                    | "estimatedMinutes"
+                    | "parentId"
                 >
             > = {};
 
@@ -236,8 +271,20 @@ export async function tasksHandler(
                 updates.priority = body.priority;
             }
 
-            if (typeof body.dueDate === "string") {
+            if (typeof body.scheduledDate === "string") {
+                updates.scheduledDate = body.scheduledDate;
+                updates.dueDate = body.scheduledDate;
+            } else if (typeof body.dueDate === "string") {
                 updates.dueDate = body.dueDate;
+                updates.scheduledDate = body.dueDate;
+            }
+
+            if (typeof body.estimatedMinutes === "number") {
+                updates.estimatedMinutes = body.estimatedMinutes;
+            }
+
+            if (body.parentId !== undefined) {
+                updates.parentId = body.parentId;
             }
 
             if (Object.keys(updates).length === 0) {
@@ -262,10 +309,12 @@ export async function tasksHandler(
                 );
             }
 
-            return response(
-                200,
-                successResponse(updatedTask),
-            );
+            return response(200, {
+                id: updatedTask.id || updatedTask.taskId,
+                status: updatedTask.status,
+                scheduledDate: updatedTask.scheduledDate || null,
+                updatedAt: updatedTask.updatedAt,
+            });
         }
 
         return response(

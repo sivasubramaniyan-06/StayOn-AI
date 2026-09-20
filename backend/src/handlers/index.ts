@@ -12,6 +12,8 @@ import { todayHandler } from "./today";
 import { habitsHandler } from "./habits";
 import { habitLogsHandler } from "./habitLogs";
 import { streaksHandler } from "./streaks";
+import { agentHandler } from "./agent";
+import { replanHandler } from "./replan";
 
 const CORS_HEADERS = {
   "Content-Type": "application/json",
@@ -46,12 +48,16 @@ export async function handler(
     result = await habitsHandler(req);
   } else if (path === "/today") {
     result = await todayHandler(req);
-  } else if (path === "/goals") {
+  } else if (path === "/goals" || path.startsWith("/goals/")) {
     result = await goalsHandler(req);
   } else if (path === "/documents" || path.startsWith("/documents/")) {
     result = await documentsHandler(req);
   } else if (path === "/tasks" || path.startsWith("/tasks/")) {
     result = await tasksHandler(req);
+  } else if (path === "/agent") {
+    result = await agentHandler(req);
+  } else if (path === "/replan") {
+    result = await replanHandler(req);
   } else {
     result = {
       statusCode: 404,

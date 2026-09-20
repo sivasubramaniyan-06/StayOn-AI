@@ -12,21 +12,47 @@ import {
     userPartitionKey,
 } from "../utils/dynamoKeys";
 
+function mapHabit(h: Habit): Habit {
+    const title = h.title || h.name || "";
+    const targetMinutes = h.targetMinutes ?? h.targetCount;
+    const streak = h.streak ?? h.currentStreak ?? 0;
+
+    return {
+        ...h,
+        id: h.id || h.habitId,
+        title,
+        name: title,
+        targetMinutes,
+        targetCount: targetMinutes,
+        streak,
+        currentStreak: streak,
+        longestStreak: h.longestStreak ?? streak,
+    };
+}
+
 export async function createHabit(
     habit: Habit,
 ): Promise<Habit> {
+    const item: Habit = mapHabit({
+        ...habit,
+        id: habit.habitId,
+        currentStreak: 0,
+        longestStreak: 0,
+        streak: 0,
+    });
+
     await dynamoDB.send(
         new PutCommand({
             TableName: env.tableName,
             Item: {
-                PK: userPartitionKey(habit.userId),
-                SK: habitSortKey(habit.habitId),
-                ...habit,
+                PK: userPartitionKey(item.userId),
+                SK: habitSortKey(item.habitId),
+                ...item,
             },
         }),
     );
 
-    return habit;
+    return item;
 }
 
 export async function getHabits(
@@ -44,7 +70,7 @@ export async function getHabits(
         }),
     );
 
-    return (result.Items ?? []) as Habit[];
+    return ((result.Items ?? []) as Habit[]).map(mapHabit);
 }
 
 export async function getHabit(
@@ -61,7 +87,8 @@ export async function getHabit(
         }),
     );
 
-    return (result.Item as Habit | undefined) ?? null;
+    const item = (result.Item as Habit | undefined) ?? null;
+    return item ? mapHabit(item) : null;
 }
 
 export async function updateHabit(
@@ -70,11 +97,16 @@ export async function updateHabit(
     updates: Partial<
         Pick<
             Habit,
+            | "title"
             | "name"
             | "frequency"
+            | "targetMinutes"
             | "targetCount"
+            | "streak"
             | "currentStreak"
             | "longestStreak"
+            | "completedToday"
+            | "lastCompletedDate"
         >
     >,
 ): Promise<Habit | null> {
@@ -84,11 +116,26 @@ export async function updateHabit(
         return null;
     }
 
-    const updatedHabit: Habit = {
+    const title = updates.title || updates.name || existing.title;
+    const targetMinutes =
+        updates.targetMinutes ?? updates.targetCount ?? existing.targetMinutes;
+
+    const streak =
+        updates.streak ?? updates.currentStreak ?? existing.streak ?? existing.currentStreak;
+
+    const updatedHabit: Habit = mapHabit({
         ...existing,
         ...updates,
+        id: habitId,
+        title,
+        name: title,
+        targetMinutes,
+        targetCount: targetMinutes,
+        streak,
+        currentStreak: streak,
+        longestStreak: Math.max(existing.longestStreak, streak),
         updatedAt: new Date().toISOString(),
-    };
+    });
 
     await dynamoDB.send(
         new PutCommand({

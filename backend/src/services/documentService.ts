@@ -15,18 +15,23 @@ import {
 export async function createDocument(
     document: Document,
 ): Promise<Document> {
+    const item: Document = {
+        ...document,
+        id: document.id || document.documentId,
+    };
+
     await dynamoDB.send(
         new PutCommand({
             TableName: env.tableName,
             Item: {
-                PK: userPartitionKey(document.userId),
-                SK: documentSortKey(document.documentId),
-                ...document,
+                PK: userPartitionKey(item.userId),
+                SK: documentSortKey(item.documentId),
+                ...item,
             },
         }),
     );
 
-    return document;
+    return item;
 }
 
 export async function getDocuments(
@@ -44,7 +49,10 @@ export async function getDocuments(
         }),
     );
 
-    return (result.Items ?? []) as Document[];
+    return ((result.Items ?? []) as Document[]).map((d) => ({
+        ...d,
+        id: d.id || d.documentId,
+    }));
 }
 
 export async function getDocument(
