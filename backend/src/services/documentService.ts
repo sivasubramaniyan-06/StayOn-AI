@@ -1,0 +1,107 @@
+import {
+    GetCommand,
+    PutCommand,
+    QueryCommand,
+} from "@aws-sdk/lib-dynamodb";
+
+import { dynamoDB } from "../config/dynamodb";
+import { env } from "../config/env";
+import { Document } from "../models/document";
+import {
+    documentSortKey,
+    userPartitionKey,
+} from "../utils/dynamoKeys";
+
+export async function createDocument(
+    document: Document,
+): Promise<Document> {
+    const item: Document = {
+        ...document,
+        id: document.id || document.documentId,
+    };
+
+    await dynamoDB.send(
+        new PutCommand({
+            TableName: env.tableName,
+            Item: {
+                PK: userPartitionKey(item.userId),
+                SK: documentSortKey(item.documentId),
+                ...item,
+            },
+        }),
+    );
+
+    return item;
+}
+
+export async function getDocuments(
+    userId: string,
+): Promise<Document[]> {
+    const result = await dynamoDB.send(
+        new QueryCommand({
+            TableName: env.tableName,
+            KeyConditionExpression:
+                "PK = :pk AND begins_with(SK, :sk)",
+            ExpressionAttributeValues: {
+                ":pk": userPartitionKey(userId),
+                ":sk": "DOC#",
+            },
+        }),
+    );
+
+    return ((result.Items ?? []) as Document[]).map((d) => ({
+        ...d,
+        id: d.id || d.documentId,
+    }));
+}
+
+export async function getDocument(
+    userId: string,
+    documentId: string,
+): Promise<Document | null> {
+    const result = await dynamoDB.send(
+        new GetCommand({
+            TableName: env.tableName,
+            Key: {
+                PK: userPartitionKey(userId),
+                SK: documentSortKey(documentId),
+            },
+        }),
+    );
+
+    return (result.Item as Document | undefined) ?? null;
+}
+
+export async function updateDocumentStatus(
+    userId: string,
+    documentId: string,
+    status: Document["status"],
+): Promise<Document | null> {
+    const existing = await getDocument(
+        userId,
+        documentId,
+    );
+
+    if (!existing) {
+        return null;
+    }
+
+    const updatedDocument: Document = {
+        ...existing,
+        status,
+        updatedAt: new Date().toISOString(),
+    };
+
+    await dynamoDB.send(
+        new PutCommand({
+            TableName: env.tableName,
+            Item: {
+                PK: userPartitionKey(userId),
+                SK: documentSortKey(documentId),
+                ...updatedDocument,
+            },
+        }),
+    );
+
+    return updatedDocument;
+}

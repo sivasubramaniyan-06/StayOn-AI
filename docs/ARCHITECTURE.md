@@ -10,7 +10,7 @@ StayOn AI is an intelligent student workspace designed to connect syllabus mater
 Student
   │
   ▼
-StayOn Frontend (React / Next.js)
+StayOn Frontend (React + Vite + TypeScript)
   │
   ▼
 AWS Amplify / Web Hosting

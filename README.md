@@ -55,7 +55,7 @@ Adaptive Replanning ("Bedrock suggests, backend validates, student confirms")
 ## High-Level Architecture
 
 ```
-StayOn Frontend (React / Next.js)
+StayOn Frontend (React + Vite + TypeScript)
       │
       ▼
 Amazon API Gateway
@@ -78,7 +78,7 @@ For complete architectural details, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE
 
 ```
 StayOn-AI/
-├── frontend/           # Client-side React / Next.js application
+├── frontend/           # Client-side React + Vite + TypeScript application
 ├── backend/            # AWS Lambda business logic & handlers
 ├── ai/                 # Bedrock prompts, schemas, & agent tools
 ├── infrastructure/     # AWS CloudFormation / SAM / CDK templates

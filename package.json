@@ -4,6 +4,7 @@
   "private": true,
   "description": "StayOn AI - AI-powered student workspace",
   "scripts": {
+    "build": "npm --prefix backend run build",
     "test": "echo \"No tests specified yet\" && exit 0"
   },
   "keywords": [

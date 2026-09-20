@@ -54,6 +54,7 @@ export interface Task {
   description?: string;
   parentId?: string | null;
   scheduledDate?: string;
+  scheduledStart?: string; // e.g. "08:00" or "13:30"
   estimatedMinutes?: number;
   priority?: PriorityLevel;
   status: TaskStatus;
@@ -66,6 +67,7 @@ export interface CreateTaskRequest {
   title: string;
   parentId?: string | null;
   scheduledDate?: string;
+  scheduledStart?: string;
   estimatedMinutes?: number;
 }
 
@@ -73,6 +75,9 @@ export interface UpdateTaskRequest {
   status?: TaskStatus;
   title?: string;
   scheduledDate?: string;
+  scheduledStart?: string;
+  estimatedMinutes?: number;
+  priority?: PriorityLevel;
 }
 
 // Habit Types
