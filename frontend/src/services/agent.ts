@@ -1,7 +1,7 @@
 import { apiClient } from './api';
 import { AgentMessageRequest, AgentMessageResponse, ReplanRequest, ReplanResponse } from '../types';
 
-const ENABLE_MOCK = import.meta.env.VITE_ENABLE_MOCK_FALLBACK !== 'false';
+const ENABLE_MOCK = import.meta.env.VITE_ENABLE_MOCK_FALLBACK === 'true';
 
 export const agentService = {
   /**

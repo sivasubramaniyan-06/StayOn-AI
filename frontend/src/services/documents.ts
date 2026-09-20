@@ -2,7 +2,7 @@ import { apiClient } from './api';
 import { Document, DocumentUploadResponse } from '../types';
 import { mockDocuments } from '../mock/data';
 
-const ENABLE_MOCK = import.meta.env.VITE_ENABLE_MOCK_FALLBACK !== 'false';
+const ENABLE_MOCK = import.meta.env.VITE_ENABLE_MOCK_FALLBACK === 'true';
 
 export const documentsService = {
   /**

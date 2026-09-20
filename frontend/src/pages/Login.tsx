@@ -4,8 +4,8 @@ import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { authService } from '../services/auth';
 
 export const Login: React.FC = () => {
-  const [email, setEmail] = useState('siva.student@example.com');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('demo@stayon.ai');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -21,7 +21,7 @@ export const Login: React.FC = () => {
       await authService.login(email, password);
       navigate('/dashboard');
     } catch (err: any) {
-      setError('Invalid email or password. Please try again.');
+      setError(err?.message || 'Invalid email or password. Please try again.');
     } finally {
       setIsLoading(false);
     }
